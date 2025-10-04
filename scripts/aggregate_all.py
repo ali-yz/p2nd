@@ -12,13 +12,15 @@ Usage:
       --mmcif-dir data/downloads/pc20_mmcif \
       --out parquet/dssp_dataset.parquet
 """
-
+import random
 import argparse
 import re
 from pathlib import Path
 from typing import Tuple, Optional, List
-
+import re
 import pandas as pd
+from pathlib import Path
+
 
 _DSSP_ALLOWED = set(list("HETSBIGP"))
 # 3-letter -> 1-letter (covers all standard residues + common alternates)
@@ -98,8 +100,8 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
             continue
         # ignore non-data footer lines that may look like comments
         toks = re.split(r"\s+", s.strip())
-        if len(toks) < 20:
-            continue  # too short to be a residue row
+        #if len(toks) < 20:
+        #    continue  # too short to be a residue row
 
         # 1) First four tokens are stable:
         dssp_index = toks[0]                  # unused, but could be kept if you want
@@ -108,10 +110,10 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         aa = toks[3]
 
         # 2) From the end, pull trailing numeric floats (8 of them):
-        if len(toks) < 4 + 1 + 3 + 4 + 8:
-            # Needs at least: 4 (head) + STRUCT (>=1) + 3 (BP1,BP2,ACC) + 4 (hbonds) + 8 (floats)
-            # Skip if not enough tokens
-            continue
+        #if len(toks) < 4 + 1 + 3 + 4 + 8:
+        #    # Needs at least: 4 (head) + STRUCT (>=1) + 3 (BP1,BP2,ACC) + 4 (hbonds) + 8 (floats)
+        #    # Skip if not enough tokens
+        #    continue
 
         # Last 8 numeric columns
         z_ca = _to_float_or_none(toks[-1])
@@ -191,21 +193,6 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         "pdb_id", "Chain", "icode"
     ]
     return df[[c for c in cols if c in df.columns]]
-
-import re
-import pandas as pd
-from pathlib import Path
-
-# 3-letter -> 1-letter (covers all standard residues + common alternates)
-_AA3_TO_1 = {
-    'ALA':'A','ARG':'R','ASN':'N','ASP':'D','CYS':'C','GLN':'Q','GLU':'E','GLY':'G',
-    'HIS':'H','ILE':'I','LEU':'L','LYS':'K','MET':'M','PHE':'F','PRO':'P','SER':'S',
-    'THR':'T','TRP':'W','TYR':'Y','VAL':'V',
-    # Common alt/modified fallbacks (map to parent or X)
-    'MSE':'M','SEC':'U','PYL':'O','ASX':'B','GLX':'Z','XLE':'J','UNK':'X'
-}
-
-_DSSP_ALLOWED = set("HETSBIGP")  # anything else -> C
 
 def _aa1_from_3(res3: str) -> str:
     if not res3:
@@ -323,10 +310,15 @@ def merge_leg_dssp_with_mmcif(leg_df: pd.DataFrame, mm_df: pd.DataFrame) -> pd.D
     Merge on pdb_id, Chain, RESIDUE, icode.
     Prefer AA from legacy (since that’s what you showed), but keep mmCIF AA to debug mismatches.
     """
-    key = ["pdb_id", "Chain", "RESIDUE", "icode"]
+    # temp write the mm_df to disk for debugging
+    rnd = random.randint(1, 100)
+    mm_df.to_csv(f"mmcif_dssp_debug{rnd}.csv", index=False)
+    leg_df.to_csv(f"legacy_dssp_debug{rnd}.csv", index=False)
+
+    key = ["pdb_id", "Chain", "RESIDUE"]
     merged = pd.merge(
         leg_df, mm_df[key + ["AA_from_mmcif", "DSSP_label"]],
-        on=key, how="left", validate="m:1"
+        on=key, how="left"
     )
     return merged
 
