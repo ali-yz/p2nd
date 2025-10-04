@@ -1,0 +1,62 @@
+(.venv) ubuntu@ip-172-31-26-183:~/p2nd$ python scripts/download_pdbredo_legacy.py data/metadata/cullpdb_pc20.0_res0.0-2.5_noBrks_len40-10000_R0.3_Xray_d2025_08_11_chains6495 --outdir /home/ubuntu/p2nd/data/downloads/pc20_legacy --jobs 8
+Found 6295 unique PDB ids. Downloading with 8 workers...
+files: 100%|#######################################################################################################| 6295/6295 [02:32<00:00, 41.20it/s]
+Wrote log to download_results.csv                                                                                                                      
+Success: 6239 downloaded. Failed: 56.                                                                                                                  
+Failed entries (pdbid, error):                                                                                                                         
+  4y4o requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/4y4o/legacy                                                    
+  4ybb requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/4ybb/legacy                                                    
+  6slc requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6slc/legacy                                                    
+  6swz requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6swz/legacy                                                    
+  6tak requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6tak/legacy                                                    
+  6tn5 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6tn5/legacy
+  6toc requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6toc/legacy
+  6two requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6two/legacy
+  6x6h requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6x6h/legacy
+  6xi1 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6xi1/legacy
+  6xy7 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6xy7/legacy
+  6y01 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6y01/legacy
+  6yzd requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6yzd/legacy
+  6z4n requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6z4n/legacy
+  6z3n requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6z3n/legacy
+  6zpv requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/6zpv/legacy
+  7a0d requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7a0d/legacy
+  7af2 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7af2/legacy
+  7avc requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7avc/legacy
+  7b6a requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7b6a/legacy
+  7m1a requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7m1a/legacy
+  7nbg requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7nbg/legacy
+  7nqg requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7nqg/legacy
+  7nwn requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7nwn/legacy
+  7olw requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7olw/legacy
+  7omv requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7omv/legacy
+  7os5 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7os5/legacy
+  7ouj requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7ouj/legacy
+  7ost requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7ost/legacy
+  7p24 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7p24/legacy
+  7pgz requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7pgz/legacy
+  7pj4 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7pj4/legacy
+  7pl5 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7pl5/legacy
+  7pqn requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7pqn/legacy
+  7q4t requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7q4t/legacy
+  7qym requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7qym/legacy
+  7r1o requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7r1o/legacy
+  7z6t requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7z6t/legacy
+  7zug requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/7zug/legacy
+  8amt requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8amt/legacy
+  8anx requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8anx/legacy
+  8ap0 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8ap0/legacy
+  8bke requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8bke/legacy
+  8c28 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8c28/legacy
+  8cm0 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8cm0/legacy
+  8oht requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8oht/legacy
+  8ork requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8ork/legacy
+  8p1x requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8p1x/legacy
+  8p6k requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8p6k/legacy
+  8q4k requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8q4k/legacy
+  8rtz requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/8rtz/legacy
+  9bb0 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/9bb0/legacy
+  9fjt requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/9fjt/legacy
+  9fj7 requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/9fj7/legacy
+  9g7n requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/9g7n/legacy
+  9glo requests error: 404 Client Error: Not Found for url: https://pdb-redo.eu/dssp/db/9glo/legacy
