@@ -12,7 +12,6 @@ Usage:
       --mmcif-dir data/downloads/pc20_mmcif \
       --out parquet/dssp_dataset.parquet
 """
-import random
 import argparse
 import re
 from pathlib import Path
@@ -309,11 +308,6 @@ def merge_leg_dssp_with_mmcif(leg_df: pd.DataFrame, mm_df: pd.DataFrame) -> pd.D
     Merge on pdb_id, Chain, RESIDUE, icode.
     Prefer AA from legacy (since that’s what you showed), but keep mmCIF AA to debug mismatches.
     """
-    # temp write the mm_df to disk for debugging
-    rnd = random.randint(1, 100)
-    mm_df.to_csv(f"mmcif_dssp_debug{rnd}.csv", index=False)
-    leg_df.to_csv(f"legacy_dssp_debug{rnd}.csv", index=False)
-
     key = ["pdb_id", "Chain", "RESIDUE"]
     merged = pd.merge(
         leg_df, mm_df[key + ["AA_from_mmcif", "DSSP_label"]],
