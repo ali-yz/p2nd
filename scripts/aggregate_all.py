@@ -55,10 +55,12 @@ def _to_float_or_none(x: Optional[str]) -> Optional[float]:
         return None
 
 def _parse_hbond_pair(tok: str) -> Tuple[Optional[int], Optional[float]]:
-    # tokens like "3,-0.6" or "0,0.0" or "65,-0.0"
+    # tokens like "3,-0.6" or "0,0.0" or "65,-0.0" (tolerate spaces)
     if not tok or "," not in tok:
         return None, None
     i_str, e_str = tok.split(",", 1)
+    i_str = i_str.strip()
+    e_str = e_str.strip()
     try:
         i_val = int(i_str)
     except Exception:
@@ -69,20 +71,23 @@ def _parse_hbond_pair(tok: str) -> Tuple[Optional[int], Optional[float]]:
         e_val = None
     return i_val, e_val
 
+# Float and H-bond regexes (handle missing spaces before minus signs)
+_FLOAT_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)")
+_HBOND_RE = re.compile(r"(-?\d+)\s*,\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))")
+
 def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
     """
-    Parser for legacy DSSP (like the sample you pasted). Layout:
+    Parser for legacy DSSP. Robust to missing whitespace before negative numbers.
 
       IDX RESNUM CHAIN AA  [STRUCTURE ... may contain spaces ...]  BP1  BP2  ACC
            NH-O1     OHN1     NH-O2     OHN2    TCO  KAPPA ALPHA  PHI   PSI    X-CA   Y-CA   Z-CA
-    Where the 4 hydrogen-bond columns are single tokens formatted "offset,energy".
 
-    We detect columns by:
-      - taking first 4 tokens (IDX, RESNUM, CHAIN, AA),
-      - taking the last 8 tokens as floats (Z-CA..TCO in reverse),
-      - taking the 4 tokens before those as H-bond pairs,
-      - just before those: ACC, BP2, BP1 (kept as strings),
-      - everything between AA and BP1 joined as STRUCTURE.
+    Strategy per data row:
+      1) Parse first 4 fields (IDX, RESNUM, CHAIN, AA) with a single regex.
+      2) From the right, capture the last 8 floats (TCO..Z-CA).
+      3) From the remaining left part, capture the last 4 H-bond pairs (int, float).
+      4) The 3 tokens before those are BP1, BP2, ACC (file order: BP1 BP2 ACC).
+      5) Everything between AA and BP1 is STRUCTURE (free-form).
     """
     # Find header line
     start_idx = None
@@ -95,64 +100,57 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
 
     recs = []
     for ln in lines[start_idx:]:
-        s = ln.rstrip()
-        if not s or s.startswith("#"):
+        s = ln.rstrip("\n")
+        if not s.strip() or s.lstrip().startswith("#"):
             continue
-        # ignore non-data footer lines that may look like comments
-        toks = re.split(r"\s+", s.strip())
-        #if len(toks) < 20:
-        #    continue  # too short to be a residue row
 
-        # 1) First four tokens are stable:
-        dssp_index = toks[0]                  # unused, but could be kept if you want
-        resnum_token = toks[1]
-        chain_id = toks[2]
-        aa = toks[3]
+        # 1) First four columns with a single regex; capture the rest as 'rest'
+        m = re.match(r"\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$", s)
+        if not m:
+            # Skip malformed row
+            continue
+        dssp_index, resnum_token, chain_id, aa, rest = m.groups()
 
-        # 2) From the end, pull trailing numeric floats (8 of them):
-        #if len(toks) < 4 + 1 + 3 + 4 + 8:
-        #    # Needs at least: 4 (head) + STRUCT (>=1) + 3 (BP1,BP2,ACC) + 4 (hbonds) + 8 (floats)
-        #    # Skip if not enough tokens
-        #    continue
+        # 2) Last 8 floats anywhere in the line: take the last 8 matches and their spans in 'rest'
+        float_matches = list(_FLOAT_RE.finditer(rest))
+        if len(float_matches) < 8:
+            # Not enough numeric tail; skip
+            continue
+        last8 = float_matches[-8:]
+        # Extract values in order of appearance
+        tail_vals = [rest[m_.start():m_.end()] for m_ in last8]
+        # Map to named columns: TCO, KAPPA, ALPHA, PHI, PSI, X-CA, Y-CA, Z-CA
+        tco, kappa, alpha, phi, psi, x_ca, y_ca, z_ca = [ _to_float_or_none(v) for v in tail_vals ]
+        # Everything to the left of the first of those 8 floats is the "head" for bonds/BP/struct
+        tail_start = min(m_.start() for m_ in last8)
+        head = rest[:tail_start].rstrip()
 
-        # Last 8 numeric columns
-        z_ca = _to_float_or_none(toks[-1])
-        y_ca = _to_float_or_none(toks[-2])
-        x_ca = _to_float_or_none(toks[-3])
-        psi  = _to_float_or_none(toks[-4])
-        phi  = _to_float_or_none(toks[-5])
-        alpha= _to_float_or_none(toks[-6])
-        kappa= _to_float_or_none(toks[-7])
-        tco  = _to_float_or_none(toks[-8])
+        # 3) From 'head', take the last 4 H-bond pairs by regex and extract their spans
+        hb_matches = list(_HBOND_RE.finditer(head))
+        if len(hb_matches) < 4:
+            # Not enough HB pairs; skip
+            continue
+        last4_hb = hb_matches[-4:]
+        # Note order in DSSP columns near the end: NHO1, OHN1, NHO2, OHN2
+        hb1_m, hb2_m, hb3_m, hb4_m = last4_hb
+        nho1_i, nho1_e = _parse_hbond_pair(hb1_m.group(0))
+        ohn1_i, ohn1_e = _parse_hbond_pair(hb2_m.group(0))
+        nho2_i, nho2_e = _parse_hbond_pair(hb3_m.group(0))
+        ohn2_i, ohn2_e = _parse_hbond_pair(hb4_m.group(0))
+        hb_block_start = last4_hb[0].start()
 
-        # 3) Four H-bond tokens before those 8:
-        hb4 = toks[-9]   # OHN2
-        hb3 = toks[-10]  # NHO2
-        hb2 = toks[-11]  # OHN1
-        hb1 = toks[-12]  # NHO1
-
-        nho1_i, nho1_e = _parse_hbond_pair(hb1)
-        ohn1_i, ohn1_e = _parse_hbond_pair(hb2)
-        nho2_i, nho2_e = _parse_hbond_pair(hb3)
-        ohn2_i, ohn2_e = _parse_hbond_pair(hb4)
-
-        # 4) Three tokens before those are ACC, BP2, BP1 (order in the file: BP1 BP2 ACC)
-        acc  = toks[-13]
-        bp2  = toks[-14]
-        bp1  = toks[-15]
-
-        # 5) Everything between AA and BP1 is the STRUCTURE field (can contain spaces)
-        structure_tokens = toks[4:-15]
+        # 4) Tokens immediately before the HB block are: ... BP1 BP2 ACC
+        before_hb = head[:hb_block_start].strip()
+        btoks = re.split(r"\s+", before_hb) if before_hb else []
+        if len(btoks) < 3:
+            # Not enough tokens for BP1/BP2/ACC; skip
+            continue
+        bp1, bp2, acc = btoks[-3], btoks[-2], btoks[-1]
+        structure_tokens = btoks[:-3]
         structure = " ".join(structure_tokens) if structure_tokens else ""
 
         # Parse residue number and optional insertion code (e.g., '89A')
-        # In your file, RESNUM (2nd col) is plain integer; still be safe:
-        resseq = None
-        icode = ""
-        m = re.match(r"^\s*(-?\d+)([A-Za-z]?)\s*$", resnum_token)
-        if m:
-            resseq = int(m.group(1))
-            icode  = m.group(2) or ""
+        resseq, icode = parse_resnum(resnum_token)
 
         recs.append({
             "pdb_id": pdb_id.lower(),
@@ -192,6 +190,7 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         "TCO", "KAPPA", "ALPHA", "PHI", "PSI", "X-CA", "Y-CA", "Z-CA",
         "pdb_id", "Chain", "icode"
     ]
+    # Return with a safe subset ordering
     return df[[c for c in cols if c in df.columns]]
 
 def _aa1_from_3(res3: str) -> str:
