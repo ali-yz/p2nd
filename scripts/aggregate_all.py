@@ -307,13 +307,15 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
 def merge_leg_dssp_with_mmcif(leg_df: pd.DataFrame, mm_df: pd.DataFrame) -> pd.DataFrame:
     """
     Merge on pdb_id, Chain, RESIDUE, icode.
-    Prefer AA from legacy (since that’s what you showed), but keep mmCIF AA to debug mismatches.
+    Prefer AA from legacy, but keep mmCIF AA to debug mismatches.
     """
+    
     key = ["pdb_id", "Chain", "RESIDUE"]
     merged = pd.merge(
         leg_df, mm_df[key + ["AA_from_mmcif", "DSSP_label"]],
-        on=key, how="left"
+        on=key, how="inner"
     )
+
     return merged
 
 
