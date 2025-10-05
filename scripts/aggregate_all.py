@@ -315,7 +315,8 @@ def merge_leg_dssp_with_mmcif(leg_df: pd.DataFrame, mm_df: pd.DataFrame) -> pd.D
         leg_df, mm_df[key + ["AA_from_mmcif", "DSSP_label"]],
         on=key, how="inner"
     )
-
+    # TODO: check if the dimensions make sense and avoid silent merge on wrong residues
+    
     return merged
 
 

@@ -1,6 +1,7 @@
 import pandas as pd
 
 PISCES_REF = "/home/ubuntu/p2nd/data/metadata/cullpdb_pc20.0_res0.0-2.5_noBrks_len40-10000_R0.3_Xray_d2025_08_11_chains6495"
+# TODO: remove some (5?) residues from both terminal
 
 def get_pisces_pdb_chains(pisces_ref_path: str) -> tuple[set[str], set[str]]:
     pisces_df = pd.read_csv(pisces_ref_path, sep=r'\s+')
