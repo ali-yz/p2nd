@@ -19,6 +19,7 @@ from typing import Tuple, Optional, List
 import re
 import pandas as pd
 from pathlib import Path
+from tqdm.auto import tqdm
 
 
 _DSSP_ALLOWED = set(list("HETSBIGP"))
@@ -338,14 +339,14 @@ def main():
     if not dssp_files:
         raise SystemExit(f"No DSSP files found in {dssp_dir} with suffix {args.suffix}")
 
-    for dssp_file in dssp_files:
+    for dssp_file in tqdm(dssp_files, desc="Processing DSSP files", unit="file"):
         pdb_id = dssp_file.stem.lower()
 
         # Find corresponding mmCIF
         mmcif_path = None
         for ext in [".dssp",]:
             cand = mmcif_dir / f"{pdb_id}{ext}"
-            print(f"Checking for mmCIF candidate: {cand}")
+            # print(f"Checking for mmCIF candidate: {cand}")
             if cand.exists():
                 mmcif_path = cand
                 break
@@ -393,9 +394,9 @@ def main():
     final_df = pd.concat(all_rows, ignore_index=True)
 
     # Write CSV for easy inspection/debugging
-    csv_path = out_path.with_suffix(".csv")
-    final_df.to_csv(csv_path, index=False)
-    print(f"Wrote intermediate CSV with {len(final_df):,} rows to {csv_path}")
+    # csv_path = out_path.with_suffix(".csv")
+    # final_df.to_csv(csv_path, index=False)
+    # print(f"Wrote intermediate CSV with {len(final_df):,} rows to {csv_path}")
 
     # Write parquet
     out_path.parent.mkdir(parents=True, exist_ok=True)
