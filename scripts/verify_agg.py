@@ -2,7 +2,9 @@ import pandas as pd
 
 if __name__ == "__main__":
 
-    result_path = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset.parquet"
+    result_path = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_pisces_filtered.parquet"
+    #result_path = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset.parquet"
+    
     df = pd.read_parquet(result_path)
     print(f"Read {len(df):,} rows from {result_path}")
     print(df.head())
@@ -13,3 +15,4 @@ if __name__ == "__main__":
     print(df["AA_from_mmcif"].value_counts())
     print("####")
     print(df["AA"].value_counts())
+    print(df.isnull().sum())
