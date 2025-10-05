@@ -61,9 +61,18 @@ python scripts/download_pdbredo_mmcif.py data/metadata/cullpdb_pc40.0_res0.0-2.5
 
 ### 4. Aggregate All Data into a Single Parquet File
 
+* Test:
 ```bash
 python scripts/aggregate_all.py \
    --dssp-dir /home/ubuntu/p2nd/data/downloads/agg_test_legacy \
    --mmcif-dir /home/ubuntu/p2nd/data/downloads/agg_test_mmcif \
    --out /home/ubuntu/p2nd/data/output/agg_test/dssp_dataset.parquet
+```
+
+* PC20:
+```bash
+python scripts/aggregate_all.py \
+   --dssp-dir /home/ubuntu/p2nd/data/downloads/pc20_legacy \
+   --mmcif-dir /home/ubuntu/p2nd/data/downloads/pc20_mmcif \
+   --out /home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset.parquet
 ```
