@@ -137,6 +137,10 @@ ct_w = ct_w.div(ct_w.sum(axis=1), axis=0)
 # sort rows by their dominant DSSP column for readability
 ct_w = ct_w.reindex(ct_w.idxmax(axis=1).sort_values().index)
 
+# === NEW: absolute counts for annotations (full set) ===
+ct_counts = df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
+ct_counts = ct_counts.loc[ct_w.index, ct_w.columns].astype(int).to_numpy()
+
 label_map = {
     "B": "β-bridge",
     "C": "coil/other",
@@ -157,7 +161,7 @@ cluster_sizes = df.groupby("cluster").size()
 ylabels = [f"Cluster {k} (n={cluster_sizes[k]})" for k in ct_w.index]
 
 plt.figure(figsize=(10, 6))
-ax = sns.heatmap(ct_w, cmap="viridis", xticklabels=xlabels, yticklabels=ylabels)
+ax = sns.heatmap(ct_w, cmap="viridis", xticklabels=xlabels, yticklabels=ylabels, annot=ct_counts, fmt="d")
 ax.set_title(PLOT_TITLE)
 ax.set_xlabel(PLOT_XLABEL)
 ax.set_ylabel(PLOT_YLABEL)
@@ -190,6 +194,10 @@ ct_w_core = ct_w_core.div(ct_w_core.sum(axis=1), axis=0)
 # Sort rows by dominant DSSP column for readability
 ct_w_core = ct_w_core.reindex(ct_w_core.idxmax(axis=1).sort_values().index)
 
+# === NEW: absolute counts for annotations (core only) ===
+ct_counts_core = core_df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
+ct_counts_core = ct_counts_core.loc[ct_w_core.index, ct_w_core.columns].astype(int).to_numpy()
+
 # Reuse DSSP pretty labels on X
 xlabels_core = [f"{c}:{label_map.get(c)}" for c in ct_w_core.columns]
 
@@ -198,7 +206,7 @@ cluster_sizes_core = core_df.groupby("cluster").size()
 ylabels_core = [f"Core cluster {k} (n={cluster_sizes_core[k]})" for k in ct_w_core.index]
 
 plt.figure(figsize=(10, 6))
-ax = sns.heatmap(ct_w_core, cmap="viridis", xticklabels=xlabels_core, yticklabels=ylabels_core)
+ax = sns.heatmap(ct_w_core, cmap="viridis", xticklabels=xlabels_core, yticklabels=ylabels_core, annot=ct_counts_core, fmt="d")
 ax.set_title(PLOT_TITLE_CORE)
 ax.set_xlabel(PLOT_XLABEL)
 ax.set_ylabel("Cluster (balanced-core only)")
