@@ -19,7 +19,7 @@ CLASS_CAP = 6_000
 TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_Y.parquet"
 PLOT_PATH = "/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_agglo_10kcap_pc20.png"
-PLOT_TITLE = "Balanced cluster ↔ DSSP overlap (inverse-frequency weighted) pc20_v1 kappa+alpha only"
+PLOT_TITLE = "Cluster - DSSP Overlap : AgglomerativeClustering : pc20_v1 kappa+alpha only"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
@@ -154,7 +154,12 @@ label_map = {
 }
 
 # Option A: pass mapped labels to seaborn
-xlabels = [f"{c}:{label_map.get(c)}" for c in ct_w.columns]
+# === NEW: append total counts per DSSP label (full set) ===
+totals_per_dssp_full = df["dssp"].value_counts()
+xlabels = [
+    f"{c}:{label_map.get(c)} (n={int(totals_per_dssp_full.get(c, 0))})"
+    for c in ct_w.columns
+]
 
 # Add cluster sizes to ylabels
 cluster_sizes = df.groupby("cluster").size()
@@ -199,7 +204,12 @@ ct_counts_core = core_df.pivot_table(index="cluster", columns="dssp", values="w"
 ct_counts_core = ct_counts_core.loc[ct_w_core.index, ct_w_core.columns].astype(int).to_numpy()
 
 # Reuse DSSP pretty labels on X
-xlabels_core = [f"{c}:{label_map.get(c)}" for c in ct_w_core.columns]
+# === NEW: append total counts per DSSP label (core only) ===
+totals_per_dssp_core = core_df["dssp"].value_counts()
+xlabels_core = [
+    f"{c}:{label_map.get(c)} (n={int(totals_per_dssp_core.get(c, 0))})"
+    for c in ct_w_core.columns
+]
 
 # Add core cluster sizes to Y labels
 cluster_sizes_core = core_df.groupby("cluster").size()
