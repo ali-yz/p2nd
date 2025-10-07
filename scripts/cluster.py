@@ -5,13 +5,21 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import pairwise_distances
 import seaborn as sns
 import matplotlib.pyplot as plt
+import logging
+
+logging.basicConfig(
+    format='%(asctime)s - %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 CLUSTERING_THRESHOLD = 40.0
 CLASS_CAP = 6_000
 TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_Y.parquet"
 PLOT_PATH = "/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_agglo_10kcap_pc20.png"
-PLOT_TITLE = "Balanced cluster ↔ DSSP overlap (inverse-frequency weighted) pc20_v1"
+PLOT_TITLE = "Balanced cluster ↔ DSSP overlap (inverse-frequency weighted) pc20_v1 kappa+alpha only"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
@@ -25,7 +33,7 @@ rng = np.random.default_rng(42)
 X = features
 y = np.array(labels)
 N = X.shape[0]
-print(f"Clustering: N={N:,}, features={X.shape[1]}")
+logger.info(f"Clustering: N={N:,}, features={X.shape[1]}")
 
 # sub sample to make it faster for a quick check
 if N > DOWNSAMPLE_SIZE and DOWNSAMPLE:
@@ -33,10 +41,10 @@ if N > DOWNSAMPLE_SIZE and DOWNSAMPLE:
     X = X[sel]
     y = y[sel]
     N = X.shape[0]
-    print(f"Clustering: downsampled to N={N:,}, features={X.shape[1]}")
+    logger.info(f"Clustering: downsampled to N={N:,}, features={X.shape[1]}")
 
 classes, counts = np.unique(y, return_counts=True)
-print(f"Clustering: class distribution: {dict(zip(classes, counts))}")
+logger.info(f"Clustering: class distribution: {dict(zip(classes, counts))}")
 count_map = dict(zip(classes, counts))
 
 core_idx = []
@@ -53,7 +61,8 @@ for cls in classes:
 core_idx = np.concatenate(core_idx)
 rest_idx = np.setdiff1d(np.arange(N), core_idx, assume_unique=False)
 
-print(f"Clustering: balanced core size={len(core_idx):,}, rest size={len(rest_idx):,}")
+logger.info(f"Clustering: balanced core size={len(core_idx):,}, rest size={len(rest_idx):,}")
+logger.info(f"Clustering: balanced core class distribution: {dict(zip(*np.unique(y[core_idx], return_counts=True)))}")
 
 # Scale using ONLY the balanced core
 scaler   = StandardScaler().fit(X[core_idx])
@@ -68,7 +77,9 @@ agg = AgglomerativeClustering(
 )
 core_labels = agg.fit_predict(Xs_core)
 
-print(f"Clustering: core clustered to K={len(np.unique(core_labels))} clusters")
+logger.info(f"Clustering: core clustered to K={len(np.unique(core_labels))} clusters")
+
+logger.info(f"Clustering: resulting cluster sizes: {dict(zip(*np.unique(core_labels, return_counts=True)))}")
 
 # Map cluster labels to 0..K-1 for clean indexing
 uniq = np.unique(core_labels)
@@ -153,3 +164,45 @@ ax.set_ylabel(PLOT_YLABEL)
 ax.tick_params(axis='x', rotation=45, labelrotation=45)
 plt.tight_layout()
 plt.savefig(PLOT_PATH, dpi=300)
+logger.info(f"Saved cluster vs DSSP overlap plot to {PLOT_PATH}")
+
+# === Core-only plot (balanced core subset) ===
+PLOT_PATH_CORE = PLOT_PATH.replace(".png", "_core.png")
+PLOT_TITLE_CORE = PLOT_TITLE + " — CORE ONLY"
+
+# Build a core-only dataframe using the same inverse-frequency weights (w) computed on the full set
+core_df = pd.DataFrame({
+    "cluster": core_labels_compact,     # clusters are defined from the core
+    "dssp":    y[core_idx],
+    "w":       w[core_idx]
+})
+
+# Weighted crosstab (row-normalized) for core only
+ct_w_core = core_df.pivot_table(
+    index="cluster",
+    columns="dssp",
+    values="w",
+    aggfunc="sum",
+    fill_value=0.0
+)
+ct_w_core = ct_w_core.div(ct_w_core.sum(axis=1), axis=0)
+
+# Sort rows by dominant DSSP column for readability
+ct_w_core = ct_w_core.reindex(ct_w_core.idxmax(axis=1).sort_values().index)
+
+# Reuse DSSP pretty labels on X
+xlabels_core = [f"{c}:{label_map.get(c)}" for c in ct_w_core.columns]
+
+# Add core cluster sizes to Y labels
+cluster_sizes_core = core_df.groupby("cluster").size()
+ylabels_core = [f"Core cluster {k} (n={cluster_sizes_core[k]})" for k in ct_w_core.index]
+
+plt.figure(figsize=(10, 6))
+ax = sns.heatmap(ct_w_core, cmap="viridis", xticklabels=xlabels_core, yticklabels=ylabels_core)
+ax.set_title(PLOT_TITLE_CORE)
+ax.set_xlabel(PLOT_XLABEL)
+ax.set_ylabel("Cluster (balanced-core only)")
+ax.tick_params(axis='x', rotation=45, labelrotation=45)
+plt.tight_layout()
+plt.savefig(PLOT_PATH_CORE, dpi=300)
+logger.info(f"Saved CORE-ONLY cluster vs DSSP overlap plot to {PLOT_PATH_CORE}")
