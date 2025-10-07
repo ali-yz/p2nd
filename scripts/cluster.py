@@ -3,8 +3,11 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import pairwise_distances
+import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.font_manager as fm
 import logging
 
 logging.basicConfig(
@@ -14,16 +17,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CLUSTERING_THRESHOLD = 40.0
 CLASS_CAP = 6_000
 TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_Y.parquet"
-PLOT_PATH = "/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_agglo_10kcap_pc20.png"
-PLOT_TITLE = "Cluster - DSSP Overlap : AgglomerativeClustering : pc20_v1 kappa+alpha only"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
 DOWNSAMPLE_SIZE = 100_000
+
+CLUSTERING_ALGO = "agglomerative"  # "agglomerative" or "hdbscan"
+HDBSCAN_MIN_CLUSTER_SIZE = 100
+HDBSCAN_MIN_SAMPLES = None
+AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
+PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features=KAPPA+ALPHA : data=pc20_v1"
+PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_{CLUSTERING_ALGO}_10kcap_pc20.png"
+
+
+## SET FONTS
+preferred = ["Roboto", "Roboto Regular", "Roboto Condensed", "Roboto Slab", "Roboto Mono"]
+available = {f.name for f in fm.fontManager.ttflist}
+for fam in preferred:
+    if fam in available:
+        mpl.rcParams["font.family"] = fam
+        break
+mpl.rcParams["pdf.fonttype"] = 42
+mpl.rcParams["ps.fonttype"]  = 42
+mpl.rcParams["svg.fonttype"] = "none"
+mpl.rcParams["mathtext.fontset"] = "stixsans"  # STIX sans pairs reasonably with Roboto
+
 
 features = pd.read_parquet(TRANSFORMED_PATH_X).to_numpy()
 labels = pd.read_parquet(TRANSFORMED_PATH_Y)["DSSP_label"].tolist()
@@ -70,16 +91,25 @@ Xs_core  = scaler.transform(X[core_idx])
 Xs_rest  = scaler.transform(X[rest_idx])
 Xs_all   = scaler.transform(X)  # for later use
 
-agg = AgglomerativeClustering(
-    n_clusters=None,           # let threshold decide
-    distance_threshold=CLUSTERING_THRESHOLD,    # tune this!
-    linkage='ward'
-)
-core_labels = agg.fit_predict(Xs_core)
-
-logger.info(f"Clustering: core clustered to K={len(np.unique(core_labels))} clusters")
-
-logger.info(f"Clustering: resulting cluster sizes: {dict(zip(*np.unique(core_labels, return_counts=True)))}")
+# Clustering step with selectable algorithm
+if CLUSTERING_ALGO.lower() == "agglomerative":
+    logger.info("Clustering algorithm: AgglomerativeClustering (ward, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
+    agg = AgglomerativeClustering(
+        n_clusters=None,           # let threshold decide
+        distance_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,    # tune this!
+        linkage='ward'
+    )
+    core_labels = agg.fit_predict(Xs_core)
+elif CLUSTERING_ALGO.lower() == "hdbscan":
+    logger.info(f"Clustering algorithm: HDBSCAN (min_cluster_size={HDBSCAN_MIN_CLUSTER_SIZE}, min_samples={HDBSCAN_MIN_SAMPLES})")
+    hdb = hdbscan.HDBSCAN(
+        min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
+        min_samples=HDBSCAN_MIN_SAMPLES,
+        metric='euclidean'
+    )
+    core_labels = hdb.fit_predict(Xs_core)  # labels: -1 for noise, 0..K-1 otherwise
+else:
+    raise ValueError("CLUSTERING_ALGO must be either 'agglomerative' or 'hdbscan'.")
 
 # Map cluster labels to 0..K-1 for clean indexing
 uniq = np.unique(core_labels)
@@ -137,7 +167,7 @@ ct_w = ct_w.div(ct_w.sum(axis=1), axis=0)
 # sort rows by their dominant DSSP column for readability
 ct_w = ct_w.reindex(ct_w.idxmax(axis=1).sort_values().index)
 
-# === NEW: absolute counts for annotations (full set) ===
+# absolute counts for annotations (full set)
 ct_counts = df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
 ct_counts = ct_counts.loc[ct_w.index, ct_w.columns].astype(int).to_numpy()
 
@@ -153,8 +183,7 @@ label_map = {
     "T": "turn",
 }
 
-# Option A: pass mapped labels to seaborn
-# === NEW: append total counts per DSSP label (full set) ===
+# DSSP labels with totals (full set)
 totals_per_dssp_full = df["dssp"].value_counts()
 xlabels = [
     f"{c}:{label_map.get(c)} (n={int(totals_per_dssp_full.get(c, 0))})"
@@ -199,12 +228,11 @@ ct_w_core = ct_w_core.div(ct_w_core.sum(axis=1), axis=0)
 # Sort rows by dominant DSSP column for readability
 ct_w_core = ct_w_core.reindex(ct_w_core.idxmax(axis=1).sort_values().index)
 
-# === NEW: absolute counts for annotations (core only) ===
+# absolute counts for annotations (core only)
 ct_counts_core = core_df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
 ct_counts_core = ct_counts_core.loc[ct_w_core.index, ct_w_core.columns].astype(int).to_numpy()
 
-# Reuse DSSP pretty labels on X
-# === NEW: append total counts per DSSP label (core only) ===
+# DSSP labels with totals (core only)
 totals_per_dssp_core = core_df["dssp"].value_counts()
 xlabels_core = [
     f"{c}:{label_map.get(c)} (n={int(totals_per_dssp_core.get(c, 0))})"
