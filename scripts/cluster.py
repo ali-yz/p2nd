@@ -7,13 +7,15 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 CLUSTERING_THRESHOLD = 40.0
-CLASS_CAP = 5000
+CLASS_CAP = 6_000
 TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_Y.parquet"
-PLOT_PATH = "/home/ubuntu/p2nd/data/output/pc20_v1/clustered_heatmap.png"
+PLOT_PATH = "/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_agglo_10kcap_pc20.png"
 PLOT_TITLE = "Balanced cluster ↔ DSSP overlap (inverse-frequency weighted) pc20_v1"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
+DOWNSAMPLE = False
+DOWNSAMPLE_SIZE = 100_000
 
 features = pd.read_parquet(TRANSFORMED_PATH_X).to_numpy()
 labels = pd.read_parquet(TRANSFORMED_PATH_Y)["DSSP_label"].tolist()
@@ -26,14 +28,15 @@ N = X.shape[0]
 print(f"Clustering: N={N:,}, features={X.shape[1]}")
 
 # sub sample to make it faster for a quick check
-if N > 100_000:
-    sel = rng.choice(N, size=100_000, replace=False)
+if N > DOWNSAMPLE_SIZE and DOWNSAMPLE:
+    sel = rng.choice(N, size=DOWNSAMPLE_SIZE, replace=False)
     X = X[sel]
     y = y[sel]
     N = X.shape[0]
     print(f"Clustering: downsampled to N={N:,}, features={X.shape[1]}")
 
 classes, counts = np.unique(y, return_counts=True)
+print(f"Clustering: class distribution: {dict(zip(classes, counts))}")
 count_map = dict(zip(classes, counts))
 
 core_idx = []
@@ -115,7 +118,6 @@ w_map = {c: 1.0/count_map[c] for c in classes}
 w = np.array([w_map[lab] for lab in y])
 
 df = pd.DataFrame({"cluster": full_labels, "dssp": y, "w": w})
-df = df[df["cluster"] != -1]  # optional: drop noise for the heatmap
 
 # weighted crosstab (row-normalized)
 ct_w = df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="sum", fill_value=0.0)
@@ -137,10 +139,14 @@ label_map = {
 }
 
 # Option A: pass mapped labels to seaborn
-xlabels = [label_map.get(c, c) for c in ct_w.columns]
+xlabels = [f"{c}:{label_map.get(c)}" for c in ct_w.columns]
+
+# Add cluster sizes to ylabels
+cluster_sizes = df.groupby("cluster").size()
+ylabels = [f"Cluster {k} (n={cluster_sizes[k]})" for k in ct_w.index]
 
 plt.figure(figsize=(10, 6))
-ax = sns.heatmap(ct_w, cmap="viridis", xticklabels=xlabels)
+ax = sns.heatmap(ct_w, cmap="viridis", xticklabels=xlabels, yticklabels=ylabels)
 ax.set_title(PLOT_TITLE)
 ax.set_xlabel(PLOT_XLABEL)
 ax.set_ylabel(PLOT_YLABEL)

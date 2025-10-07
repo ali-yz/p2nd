@@ -13,3 +13,9 @@ if __name__ == "__main__":
     df_y = pd.read_parquet(y_path)
     print(f"Read {len(df_y):,} rows from {y_path}")
     print(df_y.head())
+
+    print("####")
+    print(df.shape, df_y.shape)
+
+    print("####")
+    print(df_y.value_counts())
