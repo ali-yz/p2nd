@@ -18,19 +18,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CLASS_CAP = 6_000
-TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_X.parquet"
-TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_transformed_Y.parquet"
+TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v2/dssp_dataset_transformed_X.parquet"
+TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v2/dssp_dataset_transformed_Y.parquet"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
 DOWNSAMPLE_SIZE = 100_000
 
-CLUSTERING_ALGO = "hdbscan"  # "agglomerative" or "hdbscan"
+CLUSTERING_ALGO = "agglomerative"  # "agglomerative" or "hdbscan"
 HDBSCAN_MIN_CLUSTER_SIZE = 100
 HDBSCAN_MIN_SAMPLES = None
 AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
-PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features=KAPPA+ALPHA : data=pc20_v1"
-PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_v1/kappa_alpha_only_{CLUSTERING_ALGO}_10kcap_pc20.png"
+PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features=KAPPA+ALPHA+TCO : data=pc20_v2"
+PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_v2/kappa_alpha_only_{CLUSTERING_ALGO}_10kcap_pc20.png"
 
 
 ## SET FONTS
