@@ -27,7 +27,7 @@ def filter_to_keep_pisces(aggregated_df, id_chains_to_keep) -> pd.DataFrame:
 
 if __name__ == "__main__":
 
-    result_path = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset.parquet"
+    result_path = "/home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset.parquet"
     df = pd.read_parquet(result_path)
 
     print(f"Read {len(df):,} rows from {result_path}")
@@ -35,5 +35,5 @@ if __name__ == "__main__":
     id_chains_to_keep = get_pisces_pdb_chains(PISCES_REF)
     filtered_df = filter_to_keep_pisces(df, id_chains_to_keep)
 
-    output_path = "/home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset_pisces_filtered.parquet"
+    output_path = "/home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset_pisces_filtered.parquet"
     filtered_df.to_parquet(output_path, index=False)
