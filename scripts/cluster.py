@@ -17,9 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DATA_VERSION = "v4.1"
+FEATURES_DESC = "sincosphi_sincospsi_tco"
 CLASS_CAP = 6_000
-TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v2/dssp_dataset_transformed_X.parquet"
-TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v2/dssp_dataset_transformed_Y.parquet"
+TRANSFORMED_PATH_X = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_X.parquet"
+TRANSFORMED_PATH_Y = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_Y.parquet"
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
@@ -29,8 +31,8 @@ CLUSTERING_ALGO = "agglomerative"  # "agglomerative" or "hdbscan"
 HDBSCAN_MIN_CLUSTER_SIZE = 100
 HDBSCAN_MIN_SAMPLES = None
 AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
-PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features=KAPPA+ALPHA+TCO : data=pc20_v2"
-PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_v2/kappa_alpha_only_{CLUSTERING_ALGO}_10kcap_pc20.png"
+PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
+PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/{FEATURES_DESC}_{CLUSTERING_ALGO}{"_" + DOWNSAMPLE_SIZE if DOWNSAMPLE else ""}_pc20.png"
 
 
 ## SET FONTS
@@ -93,7 +95,7 @@ Xs_all   = scaler.transform(X)  # for later use
 
 # Clustering step with selectable algorithm
 if CLUSTERING_ALGO.lower() == "agglomerative":
-    logger.info("Clustering algorithm: AgglomerativeClustering (ward, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
+    logger.info(f"Clustering algorithm: AgglomerativeClustering (ward, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
     agg = AgglomerativeClustering(
         n_clusters=None,           # let threshold decide
         distance_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,    # tune this!
@@ -201,7 +203,7 @@ ax.set_xlabel(PLOT_XLABEL)
 ax.set_ylabel(PLOT_YLABEL)
 ax.tick_params(axis='x', rotation=45, labelrotation=45)
 plt.tight_layout()
-plt.savefig(PLOT_PATH, dpi=300)
+plt.savefig(PLOT_PATH, dpi=200)
 logger.info(f"Saved cluster vs DSSP overlap plot to {PLOT_PATH}")
 
 # === Core-only plot (balanced core subset) ===
@@ -250,5 +252,5 @@ ax.set_xlabel(PLOT_XLABEL)
 ax.set_ylabel("Cluster (balanced-core only)")
 ax.tick_params(axis='x', rotation=45, labelrotation=45)
 plt.tight_layout()
-plt.savefig(PLOT_PATH_CORE, dpi=300)
+plt.savefig(PLOT_PATH_CORE, dpi=200)
 logger.info(f"Saved CORE-ONLY cluster vs DSSP overlap plot to {PLOT_PATH_CORE}")

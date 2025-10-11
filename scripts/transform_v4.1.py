@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 
 PISCES_REF = "/home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset_pisces_filtered.parquet"
-TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v1.1/dssp_dataset_transformed_X.parquet"
-TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v1.1/dssp_dataset_transformed_Y.parquet"
-TRANSFORMED_PATH_META = "/home/ubuntu/p2nd/data/output/pc20_v1.1/dssp_dataset_transformed_meta.parquet"
+TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v4.1/dssp_dataset_transformed_X.parquet"
+TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v4.1/dssp_dataset_transformed_Y.parquet"
+TRANSFORMED_PATH_META = "/home/ubuntu/p2nd/data/output/pc20_v4.1/dssp_dataset_transformed_meta.parquet"
 
 _FULL = [
     "RESIDUE", "AA", "STRUCTURE_legacy", "BP1", "BP2", "ACC",
@@ -15,8 +15,8 @@ _FULL = [
 ]
 
 COLUMNS_TO_META = ["pdb_id", "Chain", "RESIDUE", "AA"]
-COLUMNS_TO_KEEP = ["KAPPA", "ALPHA"]  # <- columns to include in X (some will be transformed, some kept raw)
-ANGLE_COLUMNS = ["KAPPA", "ALPHA"]             # <- only these columns get sin/cos; others in COLUMNS_TO_KEEP are kept raw
+COLUMNS_TO_KEEP = ["PHI", "PSI", "TCO"]  # <- columns to include in X (some will be transformed, some kept raw)
+ANGLE_COLUMNS = ["PHI", "PSI"]             # <- only these columns get sin/cos; others in COLUMNS_TO_KEEP are kept raw
 Y_COLUMN = "DSSP_label"
 
 def transform_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
