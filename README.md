@@ -74,5 +74,20 @@ python scripts/aggregate_all.py \
 python scripts/aggregate_all.py \
    --dssp-dir /home/ubuntu/p2nd/data/downloads/pc20_legacy \
    --mmcif-dir /home/ubuntu/p2nd/data/downloads/pc20_mmcif \
-   --out /home/ubuntu/p2nd/data/output/pc20_v1/dssp_dataset.parquet
+   --out /home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset.parquet
+```
+
+--- 
+### 5. Filtering and Transformation
+
+```bash
+python scripts/filter_pisces.py
+```
+
+Filters the aggregated dataset to only include chains present in the PISCES reference file.
+
+
+### 6. Transform to vN data
+```bash
+python scripts/transform.py
 ```
