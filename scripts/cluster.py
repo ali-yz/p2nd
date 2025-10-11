@@ -25,7 +25,7 @@ PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
 DOWNSAMPLE_SIZE = 100_000
 
-CLUSTERING_ALGO = "agglomerative"  # "agglomerative" or "hdbscan"
+CLUSTERING_ALGO = "hdbscan"  # "agglomerative" or "hdbscan"
 HDBSCAN_MIN_CLUSTER_SIZE = 100
 HDBSCAN_MIN_SAMPLES = None
 AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
