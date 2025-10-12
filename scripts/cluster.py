@@ -17,8 +17,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DATA_VERSION = "v4.1"
-FEATURES_DESC = "sincosphi_sincospsi_tco"
+DATA_VERSION = "v5"
+FEATURES_DESC = "sincosphi_sincospsi_tco_hbondflags"
 CLASS_CAP = 6_000
 TRANSFORMED_PATH_X = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_Y.parquet"
@@ -27,12 +27,13 @@ PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
 DOWNSAMPLE = False
 DOWNSAMPLE_SIZE = 100_000
 
-CLUSTERING_ALGO = "agglomerative"  # "agglomerative" or "hdbscan"
+CLUSTERING_ALGO = "hdbscan"  # "agglomerative" or "hdbscan"
 HDBSCAN_MIN_CLUSTER_SIZE = 100
 HDBSCAN_MIN_SAMPLES = None
 AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
-PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=="agglomerative" else "HDBSCAN"} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
-PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/{FEATURES_DESC}_{CLUSTERING_ALGO}{"_" + DOWNSAMPLE_SIZE if DOWNSAMPLE else ""}_pc20.png"
+PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=='agglomerative' else 'HDBSCAN'} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
+PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + DOWNSAMPLE_SIZE if DOWNSAMPLE else ''}_pc20.png"
+PLOT_COL_ORDER = ["C", "B", "E", "G", "H", "I", "P", "S", "T"]  # desired order of DSSP columns in the heatmap
 
 
 ## SET FONTS
@@ -158,7 +159,10 @@ full_labels[rest_idx] = assigned_rest
 
 # inverse-frequency weights per DSSP class
 w_map = {c: 1.0/count_map[c] for c in classes}
+w_map_core = {c: 1.0/CLASS_CAP for c in classes}  # balanced core has uniform class counts
+# weights for full set
 w = np.array([w_map[lab] for lab in y])
+w_core = np.array([w_map_core[lab] for lab in y])
 
 df = pd.DataFrame({"cluster": full_labels, "dssp": y, "w": w})
 
@@ -168,6 +172,9 @@ ct_w = ct_w.div(ct_w.sum(axis=1), axis=0)
 
 # sort rows by their dominant DSSP column for readability
 ct_w = ct_w.reindex(ct_w.idxmax(axis=1).sort_values().index)
+
+desired_cols = [c for c in PLOT_COL_ORDER if c in ct_w.columns]
+ct_w = ct_w.reindex(columns=desired_cols)
 
 # absolute counts for annotations (full set)
 ct_counts = df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
@@ -214,7 +221,7 @@ PLOT_TITLE_CORE = PLOT_TITLE + " — CORE ONLY"
 core_df = pd.DataFrame({
     "cluster": core_labels_compact,     # clusters are defined from the core
     "dssp":    y[core_idx],
-    "w":       w[core_idx]
+    "w":       w_core[core_idx]
 })
 
 # Weighted crosstab (row-normalized) for core only
@@ -229,6 +236,9 @@ ct_w_core = ct_w_core.div(ct_w_core.sum(axis=1), axis=0)
 
 # Sort rows by dominant DSSP column for readability
 ct_w_core = ct_w_core.reindex(ct_w_core.idxmax(axis=1).sort_values().index)
+
+desired_cols = [c for c in PLOT_COL_ORDER if c in ct_w_core.columns]
+ct_w_core = ct_w_core.reindex(columns=desired_cols)
 
 # absolute counts for annotations (core only)
 ct_counts_core = core_df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
