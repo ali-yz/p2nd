@@ -1,3 +1,19 @@
+#!/usr/bin/env python3
+# cluster.py
+
+"""
+Cluster DSSP features using specified algorithm and persist results.
+python scripts/cluster.py \
+   --algo hdbscan \
+   --features_desc sincosphi_sincospsi_tco_hbondflags \
+   --data_version v5
+
+python scripts/cluster.py \
+    --algo agglomerative \
+    --features_desc sincosphi_sincospsi_tco_hbondflags \
+    --data_version v5
+"""
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -10,6 +26,10 @@ import matplotlib as mpl
 import matplotlib.font_manager as fm
 import logging
 
+import argparse, os, json
+from datetime import datetime
+from joblib import dump
+
 logging.basicConfig(
     format='%(asctime)s - %(message)s',
     level=logging.INFO,
@@ -17,24 +37,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DATA_VERSION = "v5"
-FEATURES_DESC = "sincosphi_sincospsi_tco_hbondflags"
+# >>> CHANGED: argparse to receive algo, feature desc, and data version
+parser = argparse.ArgumentParser(description="Cluster DSSP features and persist results.")
+parser.add_argument("--algo", choices=["agglomerative", "hdbscan"], required=True,
+                    help="Clustering algorithm to use.")
+parser.add_argument("--features_desc", required=True,
+                    help="Short descriptor for features used (goes into output paths).")
+parser.add_argument("--data_version", required=True,
+                    help="Data version tag, e.g. v5.")
+parser.add_argument("--downsample", action="store_true",
+                    help="Optional: enable downsampling for quick checks.")
+parser.add_argument("--downsample_size", type=int, default=100_000,
+                    help="Downsample size if --downsample is set.")
+parser.add_argument("--hdb_min_cluster_size", type=int, default=100,
+                    help="HDBSCAN min_cluster_size.")
+parser.add_argument("--hdb_min_samples", type=int, default=None,
+                    help="HDBSCAN min_samples (None defaults to min_cluster_size).")
+parser.add_argument("--agg_distance_threshold", type=float, default=40.0,
+                    help="Agglomerative distance_threshold.")
+args = parser.parse_args()
+
+DATA_VERSION = args.data_version
+FEATURES_DESC = args.features_desc
+CLUSTERING_ALGO = args.algo
+DOWNSAMPLE = args.downsample
+DOWNSAMPLE_SIZE = args.downsample_size
+HDBSCAN_MIN_CLUSTER_SIZE = args.hdb_min_cluster_size
+HDBSCAN_MIN_SAMPLES = args.hdb_min_samples
+AGGLOMERATIVE_DISTANCE_THRESHOLD = args.agg_distance_threshold
 CLASS_CAP = 6_000
+
+# derive IO paths and per-algo subdir
+BASE_DIR = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}"
+ALGO_DIR = os.path.join(BASE_DIR, FEATURES_DESC, CLUSTERING_ALGO)
+os.makedirs(ALGO_DIR, exist_ok=True)
+
 TRANSFORMED_PATH_X = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_Y.parquet"
+
+algo_name_for_title = "AgglomerativeClustering" if CLUSTERING_ALGO == "agglomerative" else "HDBSCAN"
+PLOT_TITLE = f"Cluster - DSSP Overlap : {algo_name_for_title} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
+PLOT_PATH = os.path.join(
+    ALGO_DIR,
+    f"{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20.png"
+)
+
 PLOT_XLABEL = "DSSP label"
 PLOT_YLABEL = "Cluster (balanced-core + medoid assignment)"
-DOWNSAMPLE = False
-DOWNSAMPLE_SIZE = 100_000
-
-CLUSTERING_ALGO = "hdbscan"  # "agglomerative" or "hdbscan"
-HDBSCAN_MIN_CLUSTER_SIZE = 100
-HDBSCAN_MIN_SAMPLES = None
-AGGLOMERATIVE_DISTANCE_THRESHOLD = 40.0
-PLOT_TITLE = f"Cluster - DSSP Overlap : {"AgglomerativeClustering" if CLUSTERING_ALGO=='agglomerative' else 'HDBSCAN'} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
-PLOT_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + DOWNSAMPLE_SIZE if DOWNSAMPLE else ''}_pc20.png"
 PLOT_COL_ORDER = ["C", "B", "E", "G", "H", "I", "P", "S", "T"]  # desired order of DSSP columns in the heatmap
-
 
 ## SET FONTS
 preferred = ["Roboto", "Roboto Regular", "Roboto Condensed", "Roboto Slab", "Roboto Mono"]
@@ -47,7 +97,6 @@ mpl.rcParams["pdf.fonttype"] = 42
 mpl.rcParams["ps.fonttype"]  = 42
 mpl.rcParams["svg.fonttype"] = "none"
 mpl.rcParams["mathtext.fontset"] = "stixsans"  # STIX sans pairs reasonably with Roboto
-
 
 features = pd.read_parquet(TRANSFORMED_PATH_X).to_numpy()
 labels = pd.read_parquet(TRANSFORMED_PATH_Y)["DSSP_label"].tolist()
@@ -214,7 +263,10 @@ plt.savefig(PLOT_PATH, dpi=200)
 logger.info(f"Saved cluster vs DSSP overlap plot to {PLOT_PATH}")
 
 # === Core-only plot (balanced core subset) ===
-PLOT_PATH_CORE = PLOT_PATH.replace(".png", "_core.png")
+PLOT_PATH_CORE = os.path.join(
+    ALGO_DIR,
+    f"{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20_core.png"
+)
 PLOT_TITLE_CORE = PLOT_TITLE + " — CORE ONLY"
 
 # Build a core-only dataframe using the same inverse-frequency weights (w) computed on the full set
@@ -264,3 +316,63 @@ ax.tick_params(axis='x', rotation=45, labelrotation=45)
 plt.tight_layout()
 plt.savefig(PLOT_PATH_CORE, dpi=200)
 logger.info(f"Saved CORE-ONLY cluster vs DSSP overlap plot to {PLOT_PATH_CORE}")
+
+# Persist minimal artifacts for downstream profiling
+# 1) Cluster labels aligned to original row order in this run
+clusters_path = os.path.join(ALGO_DIR, "clusters.parquet")
+pd.DataFrame({"cluster": full_labels}).to_parquet(clusters_path, index=False)
+
+# 2) Scaler so profiling can reproduce the exact transform
+scaler_path = os.path.join(ALGO_DIR, "scaler.joblib")
+dump(scaler, scaler_path)
+
+# 3) Metadata for reproducibility
+meta = {
+    "timestamp": datetime.now().isoformat(),
+    "data_version": DATA_VERSION,
+    "features_desc": FEATURES_DESC,
+    "algo": CLUSTERING_ALGO,
+    "params": {
+        "hdbscan": {
+            "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
+            "min_samples": HDBSCAN_MIN_SAMPLES
+        },
+        "agglomerative": {
+            "distance_threshold": AGGLOMERATIVE_DISTANCE_THRESHOLD,
+            "linkage": "ward"
+        },
+        "class_cap": CLASS_CAP,
+        "downsample": DOWNSAMPLE,
+        "downsample_size": DOWNSAMPLE_SIZE
+    },
+    "shapes": {
+        "N": int(N),
+        "n_features": int(X.shape[1]),
+        "n_clusters_in_core": int(K)
+    },
+    "class_counts_core": dict(zip(*np.unique(y[core_idx], return_counts=True))),
+    "class_counts_full": dict(zip(*np.unique(y, return_counts=True))),
+    "plots": {
+        "full": PLOT_PATH,
+        "core": PLOT_PATH_CORE
+    },
+    "artifacts": {
+        "clusters_parquet": clusters_path,
+        "scaler_joblib": scaler_path
+    }
+}
+
+def _to_py(o):
+    import numpy as np
+    if isinstance(o, (np.integer,)):
+        return int(o)
+    if isinstance(o, (np.floating,)):
+        return float(o)
+    if isinstance(o, (np.ndarray,)):
+        return o.tolist()
+    return o
+
+with open(os.path.join(ALGO_DIR, "metadata.json"), "w") as f:
+    json.dump(meta, f, indent=2, default=_to_py)
+
+logger.info(f"Saved clustering artifacts to {ALGO_DIR}")
