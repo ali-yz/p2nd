@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score  # <<< CHANGED
+from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score
 import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -28,7 +28,6 @@ import logging
 
 import argparse, os, json
 from datetime import datetime
-from joblib import dump
 
 logging.basicConfig(
     format='%(asctime)s - %(message)s',
@@ -37,7 +36,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# >>> CHANGED: argparse to receive algo, feature desc, and data version
+# argparse to receive algo, feature desc, and data version
 parser = argparse.ArgumentParser(description="Cluster DSSP features and persist results.")
 parser.add_argument("--algo", choices=["agglomerative", "hdbscan"], required=True,
                     help="Clustering algorithm to use.")
@@ -185,7 +184,7 @@ except Exception as e:
     logger.warning(f"AMI_core computation failed: {e}")
     AMI_core = None
 
-# <<< CHANGED: Replace DBCV with Silhouette (sampled) on core >>>
+# Compute Internal metric on the core (Silhouette)
 try:
     logger.info("Computing Silhouette_core (sampled)...")
     SIL_SAMPLE_SIZE = min(27000, Xs_core.shape[0])
@@ -199,7 +198,6 @@ try:
 except Exception as e:
     logger.warning(f"Silhouette_core computation failed: {e}")
     Silhouette_core = None
-# >>> END CHANGED
 
 def cluster_medoid(Xs, idxs):
     # compute distances within cluster (avoid full NxN by slicing per-cluster)
@@ -387,7 +385,7 @@ meta = {
     },
     "scores": {
         "AMI_core": AMI_core,
-        "Silhouette_core": Silhouette_core,  # <<< CHANGED
+        "Silhouette_core": Silhouette_core,
     },
     "class_counts_core": dict(zip(*np.unique(y[core_idx], return_counts=True))),
     "class_counts_full": dict(zip(*np.unique(y, return_counts=True))),
