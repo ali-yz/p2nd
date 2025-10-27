@@ -31,6 +31,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import pairwise_distances
 from sklearn.decomposition import FactorAnalysis  # <<< ADDED
+from sklearn.metrics import adjusted_mutual_info_score  # <<< ADDED (metrics)
 import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -399,6 +400,27 @@ full_labels = np.full(N, -1)
 full_labels[core_idx] = core_labels_compact
 full_labels[rest_idx] = assigned_rest
 
+# ============ METRICS (AMI_core, DBCV_full) ============  # <<< ADDED (metrics)
+try:
+    logger.info("Computing AMI_core...")
+    ami_core = float(adjusted_mutual_info_score(y[core_idx], core_labels_compact, average_method='arithmetic'))
+except Exception as e:
+    logger.warning(f"AMI_core computation failed: {e}")
+    ami_core = None
+
+# DBCV requires at least two non-noise clusters; guard for degenerate cases
+try:
+    logger.info("Computing DBCV_full...")
+    non_noise = full_labels[full_labels != -1]
+    dbcv_full = float(hdbscan.validity_index(Xs_all, full_labels, metric='euclidean')) \
+        if (len(np.unique(non_noise)) >= 2) else None
+except Exception as e:
+    logger.warning(f"DBCV_full computation failed: {e}")
+    dbcv_full = None
+
+logger.info(f"Metrics — AMI_core: {ami_core}, DBCV_full: {dbcv_full}")  # <<< ADDED (metrics)
+# ========================================================  # <<< ADDED (metrics)
+
 # inverse-frequency weights per DSSP class
 w_map = {c: 1.0/count_map[c] for c in classes}
 w_map_core = {c: 1.0/CLASS_CAP for c in classes}  # balanced core has uniform class counts
@@ -567,6 +589,10 @@ meta = {
     "artifacts": {
         "clusters_parquet": clusters_path,
         "scaler_joblib": scaler_path
+    },
+    "metrics": {
+        "external": {"AMI_core": ami_core},
+        "internal": {"DBCV_full": dbcv_full}
     }
 }
 

@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
 import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -53,8 +53,12 @@ parser.add_argument("--hdb_min_cluster_size", type=int, default=100,
                     help="HDBSCAN min_cluster_size.")
 parser.add_argument("--hdb_min_samples", type=int, default=None,
                     help="HDBSCAN min_samples (None defaults to min_cluster_size).")
+parser.add_argument("--hdb_cluster_selection_method", type=str, default="eom",
+                    help="HDBSCAN cluster_selection_method. eom or leaf.")
 parser.add_argument("--agg_distance_threshold", type=float, default=40.0,
                     help="Agglomerative distance_threshold.")
+parser.add_argument("--agg_linkage", type=str, default="ward",
+                    help="Agglomerative linkage method. ward, complete, average, single. default=ward.")
 args = parser.parse_args()
 
 DATA_VERSION = args.data_version
@@ -64,7 +68,9 @@ DOWNSAMPLE = args.downsample
 DOWNSAMPLE_SIZE = args.downsample_size
 HDBSCAN_MIN_CLUSTER_SIZE = args.hdb_min_cluster_size
 HDBSCAN_MIN_SAMPLES = args.hdb_min_samples
+HDBSCAN_METHOD = args.hdb_cluster_selection_method
 AGGLOMERATIVE_DISTANCE_THRESHOLD = args.agg_distance_threshold
+AGGLOMERATIVE_LINKAGE = args.agg_linkage
 CLASS_CAP = 6_000
 
 # derive IO paths and per-algo subdir
@@ -145,11 +151,11 @@ Xs_all   = scaler.transform(X)  # for later use
 
 # Clustering step with selectable algorithm
 if CLUSTERING_ALGO.lower() == "agglomerative":
-    logger.info(f"Clustering algorithm: AgglomerativeClustering (ward, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
+    logger.info(f"Clustering algorithm: AgglomerativeClustering ({CLUSTERING_ALGO}, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
     agg = AgglomerativeClustering(
         n_clusters=None,           # let threshold decide
         distance_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,    # tune this!
-        linkage='ward'
+        linkage=AGGLOMERATIVE_LINKAGE
     )
     core_labels = agg.fit_predict(Xs_core)
 elif CLUSTERING_ALGO.lower() == "hdbscan":
@@ -157,7 +163,8 @@ elif CLUSTERING_ALGO.lower() == "hdbscan":
     hdb = hdbscan.HDBSCAN(
         min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
         min_samples=HDBSCAN_MIN_SAMPLES,
-        metric='euclidean'
+        metric='euclidean',
+        cluster_selection_method=HDBSCAN_METHOD
     )
     core_labels = hdb.fit_predict(Xs_core)  # labels: -1 for noise, 0..K-1 otherwise
 else:
@@ -168,6 +175,23 @@ uniq = np.unique(core_labels)
 label_to_compact = {lab:i for i, lab in enumerate(uniq)}
 core_labels_compact = np.array([label_to_compact[lab] for lab in core_labels])
 K = len(uniq)
+logger.info(f"Found {K} clusters in the core dataset.")
+
+# Compute External metric on the core (AMI)
+try:
+    logger.info("Computing AMI_core...")
+    AMI_core = float(adjusted_mutual_info_score(y[core_idx], core_labels_compact))
+except Exception as e:
+    logger.warning(f"AMI_core computation failed: {e}")
+    AMI_core = None
+
+# Compute Internal metric on the core (DBCV_core)
+try:
+    logger.info("Computing DBCV_core...")
+    DBCV_core = float(hdbscan.validity_index(Xs_core, core_labels_compact, metric='euclidean'))
+except Exception as e:
+    logger.warning(f"DBCV_core computation failed: {e}")
+    DBCV_core = None
 
 def cluster_medoid(Xs, idxs):
     # compute distances within cluster (avoid full NxN by slicing per-cluster)
@@ -324,7 +348,10 @@ pd.DataFrame({"cluster": full_labels}).to_parquet(clusters_path, index=False)
 
 # 2) Scaler so profiling can reproduce the exact transform
 scaler_path = os.path.join(ALGO_DIR, "scaler.joblib")
-dump(scaler, scaler_path)
+# dump(scaler, scaler_path)
+
+# <<< CHANGED: Log scores before writing metadata (now includes DBCV_core)
+logger.info(f"Scores — AMI_core={AMI_core}, DBCV_core={DBCV_core}: ARGS: {args}")
 
 # 3) Metadata for reproducibility
 meta = {
@@ -350,6 +377,10 @@ meta = {
         "n_features": int(X.shape[1]),
         "n_clusters_in_core": int(K)
     },
+    "scores": {
+        "AMI_core": AMI_core,
+        "DBCV_core": DBCV_core,
+    },
     "class_counts_core": dict(zip(*np.unique(y[core_idx], return_counts=True))),
     "class_counts_full": dict(zip(*np.unique(y, return_counts=True))),
     "plots": {
@@ -372,7 +403,7 @@ def _to_py(o):
         return o.tolist()
     return o
 
-with open(os.path.join(ALGO_DIR, "metadata.json"), "w") as f:
+with open(os.path.join(ALGO_DIR, f"metadata_{datetime.now().isoformat()}.json"), "w") as f:
     json.dump(meta, f, indent=2, default=_to_py)
 
 logger.info(f"Saved clustering artifacts to {ALGO_DIR}")
