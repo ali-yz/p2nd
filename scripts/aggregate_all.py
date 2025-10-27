@@ -14,11 +14,10 @@ Usage:
 """
 import argparse
 import re
+import math
 from pathlib import Path
 from typing import Tuple, Optional, List
-import re
 import pandas as pd
-from pathlib import Path
 from tqdm.auto import tqdm
 
 
@@ -81,13 +80,6 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
 
       IDX RESNUM CHAIN AA  [STRUCTURE ... may contain spaces ...]  BP1  BP2  ACC
            NH-O1     OHN1     NH-O2     OHN2    TCO  KAPPA ALPHA  PHI   PSI    X-CA   Y-CA   Z-CA
-
-    Strategy per data row:
-      1) Parse first 4 fields (IDX, RESNUM, CHAIN, AA) with a single regex.
-      2) From the right, capture the last 8 floats (TCO..Z-CA).
-      3) From the remaining left part, capture the last 4 H-bond pairs (int, float).
-      4) The 3 tokens before those are BP1, BP2, ACC (file order: BP1 BP2 ACC).
-      5) Everything between AA and BP1 is STRUCTURE (free-form).
     """
     # Find header line
     start_idx = None
@@ -107,31 +99,25 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         # 1) First four columns with a single regex; capture the rest as 'rest'
         m = re.match(r"\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$", s)
         if not m:
-            # Skip malformed row
             continue
         dssp_index, resnum_token, chain_id, aa, rest = m.groups()
 
         # 2) Last 8 floats anywhere in the line: take the last 8 matches and their spans in 'rest'
         float_matches = list(_FLOAT_RE.finditer(rest))
         if len(float_matches) < 8:
-            # Not enough numeric tail; skip
             continue
         last8 = float_matches[-8:]
-        # Extract values in order of appearance
         tail_vals = [rest[m_.start():m_.end()] for m_ in last8]
         # Map to named columns: TCO, KAPPA, ALPHA, PHI, PSI, X-CA, Y-CA, Z-CA
-        tco, kappa, alpha, phi, psi, x_ca, y_ca, z_ca = [ _to_float_or_none(v) for v in tail_vals ]
-        # Everything to the left of the first of those 8 floats is the "head" for bonds/BP/struct
+        tco, kappa, alpha, phi, psi, x_ca, y_ca, z_ca = [_to_float_or_none(v) for v in tail_vals]
         tail_start = min(m_.start() for m_ in last8)
         head = rest[:tail_start].rstrip()
 
-        # 3) From 'head', take the last 4 H-bond pairs by regex and extract their spans
+        # 3) From 'head', take the last 4 H-bond pairs
         hb_matches = list(_HBOND_RE.finditer(head))
         if len(hb_matches) < 4:
-            # Not enough HB pairs; skip
             continue
         last4_hb = hb_matches[-4:]
-        # Note order in DSSP columns near the end: NHO1, OHN1, NHO2, OHN2
         hb1_m, hb2_m, hb3_m, hb4_m = last4_hb
         nho1_i, nho1_e = _parse_hbond_pair(hb1_m.group(0))
         ohn1_i, ohn1_e = _parse_hbond_pair(hb2_m.group(0))
@@ -143,13 +129,12 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         before_hb = head[:hb_block_start].strip()
         btoks = re.split(r"\s+", before_hb) if before_hb else []
         if len(btoks) < 3:
-            # Not enough tokens for BP1/BP2/ACC; skip
             continue
         bp1, bp2, acc = btoks[-3], btoks[-2], btoks[-1]
         structure_tokens = btoks[:-3]
         structure = " ".join(structure_tokens) if structure_tokens else ""
 
-        # Parse residue number and optional insertion code (e.g., '89A')
+        # Residue number + optional insertion code
         resseq, icode = parse_resnum(resnum_token)
 
         recs.append({
@@ -158,10 +143,10 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
             "RESIDUE": resseq,
             "icode": icode,
             "AA": aa,
-            "STRUCTURE": structure,   # free-form legacy structure field
-            "BP1": bp1,               # keep as string (can be like '0A')
-            "BP2": bp2,               # keep as string
-            "ACC": acc,               # keep as string (numeric-looking)
+            "STRUCTURE": structure,
+            "BP1": bp1,
+            "BP2": bp2,
+            "ACC": acc,
             "N-H-->O_1_i": nho1_i,
             "N-H-->O_1_E": nho1_e,
             "O-->H-N_1_i": ohn1_i,
@@ -182,7 +167,6 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
 
     df = pd.DataFrame.from_records(recs)
 
-    # Order columns like your header, plus id/meta at the end.
     cols = [
         "RESIDUE", "AA", "STRUCTURE", "BP1", "BP2", "ACC",
         "N-H-->O_1_i", "N-H-->O_1_E", "O-->H-N_1_i", "O-->H-N_1_E",
@@ -190,7 +174,6 @@ def parse_legacy_dssp_lines(lines: List[str], pdb_id: str) -> pd.DataFrame:
         "TCO", "KAPPA", "ALPHA", "PHI", "PSI", "X-CA", "Y-CA", "Z-CA",
         "pdb_id", "Chain", "icode"
     ]
-    # Return with a safe subset ordering
     return df[[c for c in cols if c in df.columns]]
 
 def _aa1_from_3(res3: str) -> str:
@@ -202,7 +185,7 @@ def _aa1_from_3(res3: str) -> str:
 def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
     """
     Parse the `_dssp_struct_summary` loop from a DSSP-annotated mmCIF using plain text.
-    Returns columns: pdb_id, Chain, RESIDUE, icode, AA_from_mmcif, DSSP_label
+    Returns columns: pdb_id, Chain, RESIDUE, icode, AA_from_mmcif, DSSP_label, X-CA, Y-CA, Z-CA
     """
     text = Path(mmcif_path).read_text(encoding="utf-8", errors="ignore")
     lines = text.splitlines()
@@ -211,7 +194,6 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
     start = None
     for i, ln in enumerate(lines):
         if ln.strip() == "loop_":
-            # Check if the next lines are _dssp_struct_summary.* tags
             j = i + 1
             found = False
             while j < len(lines) and lines[j].strip().startswith("_"):
@@ -234,11 +216,11 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
             tag_lines.append(s)
             cur += 1
             continue
-        break  # first non-tag after loop_ header
+        break
     if not tag_lines:
         raise RuntimeError(f"No _dssp_struct_summary.* tags found in loop for {mmcif_path}")
 
-    # 3) Collect data rows until the loop ends (next loop_ / next category / '#'/blank)
+    # 3) Collect data rows until the loop ends
     data_rows = []
     while cur < len(lines):
         s = lines[cur].rstrip()
@@ -250,8 +232,8 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
         data_rows.append(s)
         cur += 1
 
-    # 4) Build tag -> index map and locate only columns we need
-    tags = [t.split()[0] for t in tag_lines]  # robust: ignore inline comments
+    # 4) Build tag -> index map and locate columns we need
+    tags = [t.split()[0] for t in tag_lines]
     tag_to_idx = {t: i for i, t in enumerate(tags)}
 
     def need(tagname):
@@ -264,19 +246,16 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
     i_seq   = need("_dssp_struct_summary.label_seq_id")
     i_comp  = need("_dssp_struct_summary.label_comp_id")
     i_ss    = need("_dssp_struct_summary.secondary_structure")
+    i_x     = need("_dssp_struct_summary.x_ca")
+    i_y     = need("_dssp_struct_summary.y_ca")
+    i_z     = need("_dssp_struct_summary.z_ca")
 
-    # 5) Tokenize rows: mmCIF loop rows are whitespace-separated; values don’t have spaces here
-    # (multi-line fields are delimited with ';' blocks, which do not occur in this section)
     parsed = []
     for row in data_rows:
         toks = re.split(r"\s+", row.strip())
-        # Skip short/bad rows
-        if len(toks) < len(tags):
-            # Some writers may compress trailing '.' columns; guard by only using required indices
-            # We still require at least up to max(index we need)+1 tokens
-            req = max(i_entry, i_asym, i_seq, i_comp, i_ss)
-            if len(toks) <= req:
-                continue
+        req = max(i_entry, i_asym, i_seq, i_comp, i_ss, i_x, i_y, i_z)
+        if len(toks) <= req:
+            continue
 
         try:
             entry_id = toks[i_entry]
@@ -284,6 +263,9 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
             resseq   = int(toks[i_seq])
             comp3    = toks[i_comp]
             ss_raw   = toks[i_ss]
+            x_ca     = float(toks[i_x])
+            y_ca     = float(toks[i_y])
+            z_ca     = float(toks[i_z])
         except Exception:
             continue
 
@@ -299,25 +281,139 @@ def dssp_like_from_mmcif(mmcif_path: Path) -> pd.DataFrame:
             "RESIDUE": resseq,
             "icode": "",
             "AA_from_mmcif": aa1,
-            "DSSP_label": dssp_label
+            "DSSP_label": dssp_label,
+            "X-CA": x_ca,
+            "Y-CA": y_ca,
+            "Z-CA": z_ca,
         })
 
     return pd.DataFrame(parsed)
 
 def merge_leg_dssp_with_mmcif(leg_df: pd.DataFrame, mm_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Merge on pdb_id, Chain, RESIDUE, icode.
-    Prefer AA from legacy, but keep mmCIF AA to debug mismatches.
+    Merge by matching Cα coordinates within a tolerance, per (pdb_id, Chain).
+    Warn if multiple hits occur within the tolerance; pick the nearest.
     """
-    
-    key = ["pdb_id", "Chain", "RESIDUE"]
+    eps = 0.01
+    e2  = eps*eps
+
+    # quick checks
+    for cols, df, name in [({"pdb_id","Chain","X-CA","Y-CA","Z-CA"}, leg_df, "legacy"),
+                           ({"pdb_id","Chain","X-CA","Y-CA","Z-CA","AA_from_mmcif","DSSP_label"}, mm_df, "mmcif")]:
+        missing = cols - set(df.columns)
+        if missing:
+            raise ValueError(f"{name} dataframe missing columns: {missing}")
+
+    # Pre-join on rounded coords to 1 decimal, then refine
+    def _round3(df):
+        out = df.copy()
+        out["_xr"] = out["X-CA"].round(1)
+        out["_yr"] = out["Y-CA"].round(1)
+        out["_zr"] = out["Z-CA"].round(1)
+        return out
+
+    leg_r = _round3(leg_df)
+    mm_r  = _round3(mm_df)
+
+    key = ["pdb_id","Chain","_xr","_yr","_zr"]
     merged = pd.merge(
-        leg_df, mm_df[key + ["AA_from_mmcif", "DSSP_label"]],
-        on=key, how="inner"
+        leg_r,
+        mm_r[key + ["AA_from_mmcif","DSSP_label","RESIDUE","icode"]].rename(
+            columns={"RESIDUE":"RESIDUE_mm","icode":"icode_mm"}
+        ),
+        on=key, how="left"
     )
-    # TODO: check if the dimensions make sense and avoid silent merge on wrong residues
-    
-    return merged
+
+    # rows needing refinement: no hit or duplicate merges on the rounded key
+    duplicate_mask = merged.duplicated(subset=list(leg_df.columns), keep=False)
+    nohit_mask     = merged["DSSP_label"].isna()
+    need_refine    = merged[duplicate_mask | nohit_mask].copy()
+    keep_ok        = merged[~(duplicate_mask | nohit_mask)].copy()
+
+    # group mm_r for fast lookup
+    idx_cols = ["pdb_id","Chain"]
+    mm_groups = {k: g for k, g in mm_r.groupby(idx_cols, sort=False)}
+
+    refined_rows: List[dict] = []
+    warn_count = 0
+    warn_cap = 10
+
+    def _d2(ax, ay, az, bx, by, bz):
+        dx = ax - bx; dy = ay - by; dz = az - bz
+        return dx*dx + dy*dy + dz*dz
+
+    for (pdb, ch), grp in need_refine.groupby(idx_cols, sort=False):
+        mmg = mm_groups.get((pdb, ch))
+        if mmg is None or mmg.empty:
+            refined_rows.extend(
+                grp.assign(_ambiguous=True, _reason="no_mm_group").to_dict("records")
+            )
+            continue
+
+        mm_points = mmg[["X-CA","Y-CA","Z-CA","AA_from_mmcif","DSSP_label","RESIDUE","icode"]].reset_index(drop=True)
+
+        for _, row in grp.iterrows():
+            ax, ay, az = float(row["X-CA"]), float(row["Y-CA"]), float(row["Z-CA"])
+            candidates = []
+            mind2 = float("inf")
+            minj  = None
+            for j, mmrow in mm_points.iterrows():
+                d2 = _d2(ax, ay, az, float(mmrow["X-CA"]), float(mmrow["Y-CA"]), float(mmrow["Z-CA"]))
+                if d2 <= e2:
+                    candidates.append((j, d2))
+                if d2 < mind2:
+                    mind2, minj = d2, j
+
+            if len(candidates) == 1:
+                j = candidates[0][0]
+                m = mm_points.loc[j]
+                out = row.copy()
+                out["AA_from_mmcif"] = m["AA_from_mmcif"]
+                out["DSSP_label"]    = m["DSSP_label"]
+                out["RESIDUE_mm"]    = m["RESIDUE"]
+                out["icode_mm"]      = m["icode"]
+                out["_ambiguous"]    = False
+                out["_reason"]       = "distance_ok"
+                refined_rows.append(out.to_dict())
+            elif len(candidates) > 1:
+                j = min(candidates, key=lambda t: t[1])[0]
+                m = mm_points.loc[j]
+                out = row.copy()
+                out["AA_from_mmcif"] = m["AA_from_mmcif"]
+                out["DSSP_label"]    = m["DSSP_label"]
+                out["RESIDUE_mm"]    = m["RESIDUE"]
+                out["icode_mm"]      = m["icode"]
+                out["_ambiguous"]    = True
+                out["_reason"]       = f"multi_hits_within_{eps}A"
+                refined_rows.append(out.to_dict())
+                if warn_count < warn_cap:
+                    print(f"[WARN] {pdb} {ch}: multiple mmCIF hits within {eps} Å for CA ({ax:.3f},{ay:.3f},{az:.3f}); taking nearest and marking ambiguous.")
+                    warn_count += 1
+            else:
+                out = row.copy()
+                out["_ambiguous"] = True
+                out["_reason"]    = f"no_hit_within_{eps}A"
+                refined_rows.append(out.to_dict())
+                if warn_count < warn_cap:
+                    print(f"[WARN] {pdb} {ch}: no mmCIF CA within {eps} Å for ({ax:.3f},{ay:.3f},{az:.3f}).")
+                    warn_count += 1
+
+    refined = pd.DataFrame(refined_rows)
+    if not refined.empty:
+        # Match the column layout of the first merge so concat is stable
+        refined = refined.reindex(columns=merged.columns)
+        merged2 = pd.concat([keep_ok, refined], ignore_index=True)
+    else:
+        merged2 = keep_ok.copy()
+
+    # Optional check: AA mismatch
+    if "AA" in merged2.columns and "AA_from_mmcif" in merged2.columns:
+        mism = merged2["AA"].notna() & merged2["AA_from_mmcif"].notna() & (merged2["AA"] != merged2["AA_from_mmcif"])
+        if mism.any():
+            n = int(mism.sum())
+            print(f"[WARN] {n} AA mismatches between legacy and mmCIF.")
+
+    return merged2
 
 
 # -------- main pipeline --------
@@ -326,7 +422,7 @@ def main():
     print("Starting aggregation of DSSP data...")
     ap = argparse.ArgumentParser()
     ap.add_argument("--dssp-dir", required=True, help="Directory with legacy .dssp files")
-    ap.add_argument("--mmcif-dir", required=True, help="Directory with matching .dssp files")
+    ap.add_argument("--mmcif-dir", required=True, help="Directory with matching .dssp/.mmcif files")
     ap.add_argument("--out", required=True, help="Output Parquet file path")
     ap.add_argument("--suffix", default=".dssp", help="DSSP file suffix (default: .dssp)")
     args = ap.parse_args()
@@ -345,11 +441,10 @@ def main():
     for dssp_file in tqdm(dssp_files, desc="Processing DSSP files", unit="file"):
         pdb_id = dssp_file.stem.lower()
 
-        # Find corresponding mmCIF
+        # Find corresponding mmCIF (look for real mmCIFs too)
         mmcif_path = None
-        for ext in [".dssp",]:
+        for ext in [".mmcif", ".cif", ".dssp"]:
             cand = mmcif_dir / f"{pdb_id}{ext}"
-            # print(f"Checking for mmCIF candidate: {cand}")
             if cand.exists():
                 mmcif_path = cand
                 break
@@ -366,7 +461,7 @@ def main():
             print(f"[WARN] No residues parsed from {dssp_file}, skipping.")
             continue
 
-        # Compute DSSP-like labels from mmCIF
+        # Compute DSSP-like labels from mmCIF (includes CA coordinates)
         mm_df = dssp_like_from_mmcif(mmcif_path)
 
         if mm_df.empty:
@@ -375,16 +470,14 @@ def main():
 
         merged = merge_leg_dssp_with_mmcif(leg_df, mm_df)
 
-        # Keep only your polished columns up-front; keep AA_from_mmcif at the end for QC
-        # Exact names to match your example:
+        # Keep only polished columns; keep AA_from_mmcif at the end for QC
         polished_cols = [
-            "RESIDUE", "AA", "STRUCTURE_legacy", "BP1", "BP2", "ACC",
+            "RESIDUE", "AA", "STRUCTURE", "BP1", "BP2", "ACC",
             "N-H-->O_1_i", "N-H-->O_1_E", "O-->H-N_1_i", "O-->H-N_1_E",
             "N-H-->O_2_i", "N-H-->O_2_E", "O-->H-N_2_i", "O-->H-N_2_E",
             "TCO", "KAPPA", "ALPHA", "PHI", "PSI", "X-CA", "Y-CA", "Z-CA",
             "pdb_id", "Chain", "DSSP_label"
         ]
-        # Add AA_from_mmcif for debugging mismatches, if present
         optional = ["AA_from_mmcif", "icode"]
         out_cols = [c for c in polished_cols if c in merged.columns] + [c for c in optional if c in merged.columns]
         merged = merged[out_cols].copy()
@@ -396,10 +489,10 @@ def main():
 
     final_df = pd.concat(all_rows, ignore_index=True)
 
-    # Write CSV for easy inspection/debugging
-    # csv_path = out_path.with_suffix(".csv")
-    # final_df.to_csv(csv_path, index=False)
-    # print(f"Wrote intermediate CSV with {len(final_df):,} rows to {csv_path}")
+    # Write CSV for easy inspection/debugging head 1000 rows
+    csv_path = out_path.with_suffix(".csv")
+    final_df.head(1000).to_csv(csv_path, index=False)
+    print(f"Wrote head 1000 rows to {csv_path} for inspection.")
 
     # Write parquet
     out_path.parent.mkdir(parents=True, exist_ok=True)

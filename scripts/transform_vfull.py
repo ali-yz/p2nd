@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 
 PISCES_REF = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset_pisces_filtered.parquet"
-TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v5/dssp_dataset_transformed_X.parquet"
-TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v5/dssp_dataset_transformed_Y.parquet"
-TRANSFORMED_PATH_META = "/home/ubuntu/p2nd/data/output/pc20_v5/dssp_dataset_transformed_meta.parquet"
+TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_vfull/dssp_dataset_transformed_X.parquet"
+TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_vfull/dssp_dataset_transformed_Y.parquet"
+TRANSFORMED_PATH_META = "/home/ubuntu/p2nd/data/output/pc20_vfull/dssp_dataset_transformed_meta.parquet"
 
 _FULL = [
     "RESIDUE", "AA", "STRUCTURE_legacy", "BP1", "BP2", "ACC",
@@ -15,8 +15,8 @@ _FULL = [
 ]
 
 COLUMNS_TO_META = ["pdb_id", "Chain", "RESIDUE", "AA"]
-COLUMNS_TO_KEEP = ["PHI", "PSI", "TCO"]   # in X (PHI/PSI -> sin/cos; TCO raw)
-ANGLE_COLUMNS = ["PHI", "PSI"]            # sin/cos only for these
+COLUMNS_TO_KEEP = ["PHI", "PSI", "TCO", "KAPPA", "ALPHA"]   # in X (PHI/PSI -> sin/cos; TCO raw)
+ANGLE_COLUMNS = []            # sin/cos only for these
 Y_COLUMN = "DSSP_label"
 
 # Hydrogen bond columns: (offset, energy) pairs we should scan

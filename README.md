@@ -75,6 +75,10 @@ python scripts/aggregate_all.py \
    --dssp-dir /home/ubuntu/p2nd/data/downloads/pc20_legacy \
    --mmcif-dir /home/ubuntu/p2nd/data/downloads/pc20_mmcif \
    --out /home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset.parquet
+
+python scripts/aggregate_legacy.py \
+   --dssp-dir /home/ubuntu/p2nd/data/downloads/pc20_legacy \
+   --out /home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset.parquet
 ```
 
 --- 
