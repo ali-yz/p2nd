@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
+from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score  # <<< CHANGED
 import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -49,13 +49,13 @@ parser.add_argument("--downsample", action="store_true",
                     help="Optional: enable downsampling for quick checks.")
 parser.add_argument("--downsample_size", type=int, default=100_000,
                     help="Downsample size if --downsample is set.")
-parser.add_argument("--hdb_min_cluster_size", type=int, default=100,
+parser.add_argument("--hdb_min_cluster_size", type=int, default=200,
                     help="HDBSCAN min_cluster_size.")
 parser.add_argument("--hdb_min_samples", type=int, default=None,
                     help="HDBSCAN min_samples (None defaults to min_cluster_size).")
 parser.add_argument("--hdb_cluster_selection_method", type=str, default="eom",
                     help="HDBSCAN cluster_selection_method. eom or leaf.")
-parser.add_argument("--agg_distance_threshold", type=float, default=40.0,
+parser.add_argument("--agg_distance_threshold", type=float, default=50.0,
                     help="Agglomerative distance_threshold.")
 parser.add_argument("--agg_linkage", type=str, default="ward",
                     help="Agglomerative linkage method. ward, complete, average, single. default=ward.")
@@ -185,13 +185,21 @@ except Exception as e:
     logger.warning(f"AMI_core computation failed: {e}")
     AMI_core = None
 
-# Compute Internal metric on the core (DBCV_core)
+# <<< CHANGED: Replace DBCV with Silhouette (sampled) on core >>>
 try:
-    logger.info("Computing DBCV_core...")
-    DBCV_core = float(hdbscan.validity_index(Xs_core, core_labels_compact, metric='euclidean'))
+    logger.info("Computing Silhouette_core (sampled)...")
+    SIL_SAMPLE_SIZE = min(27000, Xs_core.shape[0])
+    logger.info(f"Silhouette_core (sampled) N = {SIL_SAMPLE_SIZE}")
+    Silhouette_core = float(silhouette_score(
+        Xs_core, core_labels_compact,
+        metric='euclidean',
+        sample_size=SIL_SAMPLE_SIZE,
+        random_state=42
+    ))
 except Exception as e:
-    logger.warning(f"DBCV_core computation failed: {e}")
-    DBCV_core = None
+    logger.warning(f"Silhouette_core computation failed: {e}")
+    Silhouette_core = None
+# >>> END CHANGED
 
 def cluster_medoid(Xs, idxs):
     # compute distances within cluster (avoid full NxN by slicing per-cluster)
@@ -350,8 +358,8 @@ pd.DataFrame({"cluster": full_labels}).to_parquet(clusters_path, index=False)
 scaler_path = os.path.join(ALGO_DIR, "scaler.joblib")
 # dump(scaler, scaler_path)
 
-# <<< CHANGED: Log scores before writing metadata (now includes DBCV_core)
-logger.info(f"Scores — AMI_core={AMI_core}, DBCV_core={DBCV_core}: ARGS: {args}")
+# <<< CHANGED: Log scores before writing metadata (now uses Silhouette_core)
+logger.info(f"Scores — AMI_core={AMI_core}, Silhouette_core={Silhouette_core}: ARGS: {args}")
 
 # 3) Metadata for reproducibility
 meta = {
@@ -379,7 +387,7 @@ meta = {
     },
     "scores": {
         "AMI_core": AMI_core,
-        "DBCV_core": DBCV_core,
+        "Silhouette_core": Silhouette_core,  # <<< CHANGED
     },
     "class_counts_core": dict(zip(*np.unique(y[core_idx], return_counts=True))),
     "class_counts_full": dict(zip(*np.unique(y, return_counts=True))),
