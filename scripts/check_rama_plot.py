@@ -45,7 +45,7 @@ plt.figure(figsize=(7, 7))
 for group, sub in df.groupby('Group'):
     plt.scatter(
         sub['PHI'], sub['PSI'],
-        s=2, alpha=1.0, label=group, edgecolors='none'
+        s=3, alpha=0.6, label=group, edgecolors='none'
     )
 
 plt.xlim(-180, 180)
@@ -71,7 +71,7 @@ print(f"Total alpha helix residues for Ramachandran plot: {len(alpha_df)}")
 plt.figure(figsize=(7, 7))
 plt.scatter(
     alpha_df['PHI'], alpha_df['PSI'],
-    s=2, alpha=1.0, label='Alpha helix', edgecolors='none'
+    s=3, alpha=0.6, label='Alpha helix', edgecolors='none'
 )
 plt.xlim(-180, 180)
 plt.ylim(-180, 180)
@@ -94,7 +94,7 @@ print(f"Total beta strand residues for Ramachandran plot: {len(beta_df)}")
 plt.figure(figsize=(7, 7))
 plt.scatter(
     beta_df['PHI'], beta_df['PSI'],
-    s=2, alpha=1.0, label='Beta strand', edgecolors='none'
+    s=3, alpha=0.6, label='Beta strand', edgecolors='none'
 )
 plt.xlim(-180, 180)
 plt.ylim(-180, 180) 
@@ -117,7 +117,7 @@ print(f"Total PPII helix residues for Ramachandran plot: {len(ppii_df)}")
 plt.figure(figsize=(7, 7))
 plt.scatter(
     ppii_df['PHI'], ppii_df['PSI'],
-    s=2, alpha=1.0, label='PPII helix', edgecolors='none'
+    s=3, alpha=0.6, label='PPII helix', edgecolors='none'
 )
 plt.xlim(-180, 180)
 plt.ylim(-180, 180)
