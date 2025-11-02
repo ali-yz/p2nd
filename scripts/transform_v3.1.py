@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-PISCES_REF = "/home/ubuntu/p2nd/data/output/pc20_base/dssp_dataset_pisces_filtered.parquet"
+PISCES_REF = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset_pisces_filtered.parquet"
 TRANSFORMED_PATH_X = "/home/ubuntu/p2nd/data/output/pc20_v3.1/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = "/home/ubuntu/p2nd/data/output/pc20_v3.1/dssp_dataset_transformed_Y.parquet"
 TRANSFORMED_PATH_META = "/home/ubuntu/p2nd/data/output/pc20_v3.1/dssp_dataset_transformed_meta.parquet"
