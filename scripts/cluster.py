@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score
+from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score, homogeneity_score
 import hdbscan
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -183,6 +183,14 @@ try:
 except Exception as e:
     logger.warning(f"AMI_core computation failed: {e}")
     AMI_core = None
+
+# Compute External metric on the core (Homogeneity)
+try:
+    logger.info("Computing Homogeneity_core...")
+    Homogeneity_core = float(homogeneity_score(y[core_idx], core_labels_compact))
+except Exception as e:
+    logger.warning(f"Homogeneity_core computation failed: {e}")
+    Homogeneity_core = None
 
 # Compute Internal metric on the core (Silhouette)
 try:
@@ -356,8 +364,8 @@ pd.DataFrame({"cluster": full_labels}).to_parquet(clusters_path, index=False)
 scaler_path = os.path.join(ALGO_DIR, "scaler.joblib")
 # dump(scaler, scaler_path)
 
-# <<< CHANGED: Log scores before writing metadata (now uses Silhouette_core)
-logger.info(f"Scores — AMI_core={AMI_core}, Silhouette_core={Silhouette_core}: ARGS: {args}")
+# <<< CHANGED: Log scores before writing metadata (now includes Homogeneity_core)
+logger.info(f"Scores — AMI_core={AMI_core}, Homogeneity_core={Homogeneity_core}, Silhouette_core={Silhouette_core}: ARGS: {args}")
 
 # 3) Metadata for reproducibility
 meta = {
@@ -385,6 +393,7 @@ meta = {
     },
     "scores": {
         "AMI_core": AMI_core,
+        "Homogeneity_core": Homogeneity_core,
         "Silhouette_core": Silhouette_core,
     },
     "class_counts_core": dict(zip(*np.unique(y[core_idx], return_counts=True))),
