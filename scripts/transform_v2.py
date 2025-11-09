@@ -17,18 +17,6 @@ COLUMNS_TO_META = ["pdb_id", "Chain", "RESIDUE", "AA"]
 COLUMNS_TO_KEEP = ["KAPPA", "ALPHA", "TCO"]
 Y_COLUMN = "DSSP_label"
 
-def drop_tco_zero_rows(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop rows where TCO is exactly zero as a way to clean low quality/missing or intrinsically disordered residues."""
-    if "TCO" not in df.columns:
-        print("TCO column not found in dataframe; skipping drop_tco_zero_rows.")
-        return df
-    
-    initial_count = len(df)
-    df_cleaned = df[df["TCO"] != 0.0].copy()
-    final_count = len(df_cleaned)
-    print(f"Dropped {initial_count - final_count} rows with TCO == 0.0; remaining rows: {final_count}")
-    return df_cleaned
-
 def transform_dataset(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     print(f"Transforming: initial rows={len(df):,}, unique pdb_ids={df['pdb_id'].nunique():,}")
     
@@ -45,9 +33,6 @@ if __name__ == "__main__":
     df = pd.read_parquet(PISCES_REF)
 
     print(f"Read {len(df):,} rows from {PISCES_REF}")
-
-    # Clean data by dropping rows with TCO == 0.0
-    df = drop_tco_zero_rows(df)
 
     X, y, meta = transform_dataset(df)
 
