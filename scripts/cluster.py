@@ -17,7 +17,7 @@ python scripts/cluster.py \
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score, homogeneity_score
 import hdbscan
 import seaborn as sns
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # argparse to receive algo, feature desc, and data version
 parser = argparse.ArgumentParser(description="Cluster DSSP features and persist results.")
-parser.add_argument("--algo", choices=["agglomerative", "hdbscan"], required=True,
+parser.add_argument("--algo", choices=["agglomerative", "hdbscan", "kmeans"], required=True,
                     help="Clustering algorithm to use.")
 parser.add_argument("--features_desc", required=True,
                     help="Short descriptor for features used (goes into output paths).")
@@ -58,6 +58,8 @@ parser.add_argument("--agg_distance_threshold", type=float, default=50.0,
                     help="Agglomerative distance_threshold.")
 parser.add_argument("--agg_linkage", type=str, default="ward",
                     help="Agglomerative linkage method. ward, complete, average, single. default=ward.")
+parser.add_argument("--kmeans_k", type=int, default=8,
+                    help="KMeans number of clusters (K).")
 args = parser.parse_args()
 
 DATA_VERSION = args.data_version
@@ -70,6 +72,7 @@ HDBSCAN_MIN_SAMPLES = args.hdb_min_samples
 HDBSCAN_METHOD = args.hdb_cluster_selection_method
 AGGLOMERATIVE_DISTANCE_THRESHOLD = args.agg_distance_threshold
 AGGLOMERATIVE_LINKAGE = args.agg_linkage
+KMEANS_K = args.kmeans_k  # <-- new var
 CLASS_CAP = 6_000
 
 # derive IO paths and per-algo subdir
@@ -80,7 +83,11 @@ os.makedirs(ALGO_DIR, exist_ok=True)
 TRANSFORMED_PATH_X = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_Y.parquet"
 
-algo_name_for_title = "AgglomerativeClustering" if CLUSTERING_ALGO == "agglomerative" else "HDBSCAN"
+algo_name_for_title = (
+    "AgglomerativeClustering" if CLUSTERING_ALGO == "agglomerative"
+    else "HDBSCAN" if CLUSTERING_ALGO == "hdbscan"
+    else "KMeans"
+)
 PLOT_TITLE = f"Cluster - DSSP Overlap : {algo_name_for_title} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
 PLOT_PATH = os.path.join(
     ALGO_DIR,
@@ -166,8 +173,12 @@ elif CLUSTERING_ALGO.lower() == "hdbscan":
         cluster_selection_method=HDBSCAN_METHOD
     )
     core_labels = hdb.fit_predict(Xs_core)  # labels: -1 for noise, 0..K-1 otherwise
+elif CLUSTERING_ALGO.lower() == "kmeans":
+    logger.info(f"Clustering algorithm: KMeans (k={KMEANS_K})")
+    km = KMeans(n_clusters=KMEANS_K, random_state=42, n_init=10)
+    core_labels = km.fit_predict(Xs_core)
 else:
-    raise ValueError("CLUSTERING_ALGO must be either 'agglomerative' or 'hdbscan'.")
+    raise ValueError("CLUSTERING_ALGO must be either 'agglomerative', 'hdbscan', or 'kmeans'.")
 
 # Map cluster labels to 0..K-1 for clean indexing
 uniq = np.unique(core_labels)
@@ -381,6 +392,9 @@ meta = {
         "agglomerative": {
             "distance_threshold": AGGLOMERATIVE_DISTANCE_THRESHOLD,
             "linkage": "ward"
+        },
+        "kmeans": {
+            "k": KMEANS_K
         },
         "class_cap": CLASS_CAP,
         "downsample": DOWNSAMPLE,
