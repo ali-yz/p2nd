@@ -91,3 +91,40 @@ for cluster in merged_df['result_cluster'].unique():
     plt.savefig(plot_path, dpi=300)
     plt.close()
     print(f"Saved H-bond profile plot for cluster {cluster} to {plot_path}")
+
+# combine all cluster profiles into a single figure
+num_clusters = len(merged_df['result_cluster'].unique())
+fig, axes = plt.subplots(num_clusters, 2, figsize=(14, 5 * num_clusters))
+for i, cluster in enumerate(merged_df['result_cluster'].unique()):
+    cluster_df = merged_df[merged_df['result_cluster'] == cluster]
+    
+    # Ramachandran plot
+    axes[i, 0].scatter(cluster_df['base_PHI'], cluster_df['base_PSI'], s=2, alpha=0.5)
+    axes[i, 0].set_xlim(-180, 180)
+    axes[i, 0].set_ylim(-180, 180)
+    axes[i, 0].set_xticks([-180, -90, 0, 90, 180])
+    axes[i, 0].set_yticks([-180, -90, 0, 90, 180])
+    axes[i, 0].set_aspect('equal', adjustable='box')
+    axes[i, 0].grid(True, linewidth=0.5, alpha=0.3)
+    axes[i, 0].set_xlabel('ϕ (phi) [degrees]')
+    axes[i, 0].set_ylabel('ψ (psi) [degrees]')
+    axes[i, 0].set_title(f'Ramachandran Plot - Cluster {cluster} Size {len(cluster_df)}')
+    
+    # H-bond profile
+    hbond_cols = ['transformed_X_is_hbond_i-+3', 'transformed_X_is_hbond_i-+4',
+                  'transformed_X_is_hbond_i-+5', 'transformed_X_is_hbond_i-+6',
+                    'transformed_X_is_hbond_far']
+    hbond_means = cluster_df[hbond_cols].mean() * 100  # percent
+    sns.barplot(x=hbond_means.index.str.replace('transformed_X_is_hbond_', ''),
+                y=hbond_means.values,
+                hue=hbond_means.index.str.replace('transformed_X_is_hbond_', ''),
+                legend=False, palette="viridis", ax=axes[i, 1])
+    axes[i, 1].set_ylim(0, 100)
+    axes[i, 1].set_ylabel('Percentage (%)')
+    axes[i, 1].set_title(f'H-Bond Profile - Cluster {cluster} Size {len(cluster_df)}')
+plt.suptitle(f'Cluster Profiles\n{PLOT_TITLE_PREFIX}', fontsize=16)
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+combined_plot_path = os.path.join(PROFILE_OUTPUT_DIR, 'combined_cluster_profiles.png')
+plt.savefig(combined_plot_path, dpi=300)
+plt.close()
+print(f"Saved combined cluster profiles to {combined_plot_path}")
