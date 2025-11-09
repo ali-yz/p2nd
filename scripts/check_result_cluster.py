@@ -1,10 +1,5 @@
 import os
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import matplotlib.font_manager as fm
-
 
 data_version = "v5"
 features_desc = "sincosphi_sincospsi_tco_hbondflags"
@@ -18,19 +13,6 @@ PLOT_TITLE_PREFIX = f"pc20_{data_version} | {features_desc} | {algo}"
 
 # make sure output directory exists
 os.makedirs(PROFILE_OUTPUT_DIR, exist_ok=True)
-
-## SET FONTS
-preferred = ["Roboto", "Roboto Regular", "Roboto Condensed", "Roboto Slab", "Roboto Mono"]
-available = {f.name for f in fm.fontManager.ttflist}
-for fam in preferred:
-    if fam in available:
-        mpl.rcParams["font.family"] = fam
-        break
-mpl.rcParams["pdf.fonttype"] = 42
-mpl.rcParams["ps.fonttype"]  = 42
-mpl.rcParams["svg.fonttype"] = "none"
-mpl.rcParams["mathtext.fontset"] = "stixsans"  # STIX sans pairs reasonably with Roboto
-## END SET FONTS
 
 cluster_label = pd.read_parquet(CLUSTER_PARQUET_PATH)
 base_df = pd.read_parquet(BASEDATA_PATH)
