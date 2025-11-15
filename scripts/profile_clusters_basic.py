@@ -1,14 +1,30 @@
+"""Profile Clusters Basic
+Example usage:
+python scripts/profile_clusters_basic.py --data-version v5 --desc sincosphi_sincospsi_tco_hbondflags --algo hdbscan
+
+"""
+
 import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.font_manager as fm
+import argparse
 
 
-data_version = "v6.1"
-features_desc = "sincosphi_sincospsi_alpha_hbondflags"
-algo = "hdbscan"
+parser = argparse.ArgumentParser()
+parser.add_argument("--data-version", default="v5")
+parser.add_argument("--desc", default="sincosphi_sincospsi_tco_hbondflags")
+parser.add_argument("--algo", default="hdbscan")
+parser.add_argument("--only-combined-output", action='store_true', help="If set, only output combined profile figure")
+args = parser.parse_args()
+
+data_version = args.data_version
+features_desc = args.desc
+algo = args.algo
+ONLY_COMBINED_OUTPUT = args.only_combined_output
+
 CLUSTER_PARQUET_PATH = f"data/output/pc20_{data_version}/{features_desc}/{algo}/clusters.parquet"
 PROFILE_OUTPUT_DIR = f"data/output/pc20_{data_version}/{features_desc}/{algo}/profile_base/"
 BASEDATA_PATH = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset_pisces_filtered.parquet"
@@ -16,7 +32,6 @@ TRANSFORMED_X_DATA_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{data_version}/ds
 TRANSFORMED_Y_DATA_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{data_version}/dssp_dataset_transformed_Y.parquet"
 PLOT_TITLE_PREFIX = f"pc20_{data_version} | {features_desc} | {algo}"
 
-ONLY_COMBINED_OUTPUT = True  # if True, only output combined profile figure
 
 # make sure output directory exists
 os.makedirs(PROFILE_OUTPUT_DIR, exist_ok=True)

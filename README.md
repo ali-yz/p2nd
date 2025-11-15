@@ -127,7 +127,10 @@ python scripts/cluster.py \
     --algo agglomerative \
     --features_desc sincosphi_sincospsi_tco_hbondflags \
     --data_version v5
-
+python scripts/cluster.py \
+    --algo kmeans \
+    --features_desc sincosphi_sincospsi_tco_hbondflags \
+    --data_version v5
 python scripts/cluster.py \
     --algo hdbscan \
     --features_desc phi_psi_tco_kappa_alpha_hbondflags \
