@@ -89,7 +89,7 @@ python scripts/filter_pisces.py
 ```
 
 Filters the aggregated dataset to only include chains present in the PISCES reference file.
-
+Also drops terminal residues based on alpha angles being 360.0.
 
 ### 6. Transform to vN data
 ```bash
@@ -141,3 +141,4 @@ python scripts/cluster.py \
     --features_desc phi_psi_tco_kappa_alpha_hbondflags \
     --data_version vfull
 ```
+

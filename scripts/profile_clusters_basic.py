@@ -27,7 +27,7 @@ ONLY_COMBINED_OUTPUT = args.only_combined_output
 
 CLUSTER_PARQUET_PATH = f"data/output/pc20_{data_version}/{features_desc}/{algo}/clusters.parquet"
 PROFILE_OUTPUT_DIR = f"data/output/pc20_{data_version}/{features_desc}/{algo}/profile_base/"
-BASEDATA_PATH = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset_pisces_filtered.parquet"
+BASEDATA_PATH = "/home/ubuntu/p2nd/data/output/pc20_base_fixed_dropped/dssp_dataset_pisces_filtered.parquet"
 TRANSFORMED_X_DATA_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{data_version}/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_Y_DATA_PATH = f"/home/ubuntu/p2nd/data/output/pc20_{data_version}/dssp_dataset_transformed_Y.parquet"
 PLOT_TITLE_PREFIX = f"pc20_{data_version} | {features_desc} | {algo}"
@@ -54,13 +54,19 @@ base_df = pd.read_parquet(BASEDATA_PATH)
 transformed_X = pd.read_parquet(TRANSFORMED_X_DATA_PATH)
 transformed_Y = pd.read_parquet(TRANSFORMED_Y_DATA_PATH)
 
+print(f"Loaded dataframes:")
+print(f"  cluster_label: {cluster_label.shape}")
+print(f"  base_df: {base_df.shape}")
+print(f"  transformed_X: {transformed_X.shape}")
+print(f"  transformed_Y: {transformed_Y.shape}")
+
 # merge dataframes since they have same number of rows, add the name of the file as column prefix
 merged_df = pd.concat([base_df.add_prefix('base_'),
                        transformed_X.add_prefix('transformed_X_'),
                        transformed_Y.add_prefix('transformed_Y_'),
                        cluster_label.add_prefix('result_')], axis=1)
 
-print(merged_df.shape)
+print(f"  merged: {merged_df.shape}")
 print(merged_df.columns)
 
 # for each result_cluster plot base_PSI vs base_PHI
@@ -146,9 +152,13 @@ if not ONLY_COMBINED_OUTPUT:
 # combine all cluster profiles into a single figure
 num_clusters = len(merged_df['result_cluster'].unique())
 fig, axes = plt.subplots(num_clusters, 4, figsize=(14, 5 * num_clusters))
-for i, cluster in enumerate(merged_df['result_cluster'].unique()):
+for i, cluster in enumerate(sorted(merged_df['result_cluster'].unique())):
     cluster_df = merged_df[merged_df['result_cluster'] == cluster]
-    
+    # save a 10000 sample of the cluster_df to csv for external analysis
+    sample_csv_path = os.path.join(PROFILE_OUTPUT_DIR, f'cluster_{cluster}_sample.csv')
+    cluster_df.sample(n=min(10000, len(cluster_df)), random_state=42).to_csv(sample_csv_path, index=False)
+    print(f"Saved sample of cluster {cluster} to {sample_csv_path}")
+
     # Ramachandran plot
     axes[i, 0].scatter(cluster_df['base_PHI'], cluster_df['base_PSI'], s=2, alpha=0.5)
     axes[i, 0].set_xlim(-180, 180)
@@ -165,7 +175,12 @@ for i, cluster in enumerate(merged_df['result_cluster'].unique()):
     hbond_cols = ['transformed_X_is_hbond_i-+3', 'transformed_X_is_hbond_i-+4',
                   'transformed_X_is_hbond_i-+5', 'transformed_X_is_hbond_i-+6',
                     'transformed_X_is_hbond_far']
-    hbond_means = cluster_df[hbond_cols].mean() * 100  # percent
+    # check if there are any hbond columns in the dataframe
+    if not all(col in cluster_df.columns for col in hbond_cols):
+        print(f"Skipping H-bond profile for cluster {cluster} as not all hbond columns are present.")
+        hbond_means = pd.Series([0]*5, index=hbond_cols)
+    else:
+        hbond_means = cluster_df[hbond_cols].mean() * 100  # percent
     sns.barplot(x=hbond_means.index.str.replace('transformed_X_is_hbond_', ''),
                 y=hbond_means.values,
                 hue=hbond_means.index.str.replace('transformed_X_is_hbond_', ''),
@@ -188,7 +203,7 @@ for i, cluster in enumerate(merged_df['result_cluster'].unique()):
 
 plt.suptitle(f'Cluster Profiles\n{PLOT_TITLE_PREFIX}', fontsize=16)
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-combined_plot_path = os.path.join(PROFILE_OUTPUT_DIR, f'combined_cluster_profiles_{data_version}.png')
+combined_plot_path = os.path.join(PROFILE_OUTPUT_DIR, f'combined_cluster_profiles_{features_desc}_{algo}_{data_version}.png')
 plt.savefig(combined_plot_path, dpi=300)
 plt.close()
 print(f"Saved combined cluster profiles to {combined_plot_path}")

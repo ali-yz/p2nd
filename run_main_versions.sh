@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-LOGFILE="main_versions_run.log"
+LOGFILE="main_versions_dropped_data_run.log"
 
 echo "=== Cluster job started at $(date) ===" >> "$LOGFILE"
 
@@ -10,6 +10,14 @@ run_cmd () {
     echo "--- Completed at $(date) ---" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
 }
+
+run_cmd python scripts/cluster.py --algo hdbscan --features_desc sincosphi_sincospsi --data_version v3.1
+run_cmd python scripts/cluster.py --algo agglomerative --features_desc sincosphi_sincospsi --data_version v3.1
+run_cmd python scripts/cluster.py --algo kmeans --features_desc sincosphi_sincospsi --data_version v3.1
+
+run_cmd python scripts/cluster.py --algo hdbscan --features_desc sincosphi_sincospsi_tco --data_version v4.1
+run_cmd python scripts/cluster.py --algo agglomerative --features_desc sincosphi_sincospsi_tco --data_version v4.1
+run_cmd python scripts/cluster.py --algo kmeans --features_desc sincosphi_sincospsi_tco --data_version v4.1
 
 run_cmd python scripts/cluster.py --algo hdbscan --features_desc sincosphi_sincospsi_tco_hbondflags --data_version v5
 run_cmd python scripts/cluster.py --algo agglomerative --features_desc sincosphi_sincospsi_tco_hbondflags --data_version v5

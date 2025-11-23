@@ -25,17 +25,30 @@ def filter_to_keep_pisces(aggregated_df, id_chains_to_keep) -> pd.DataFrame:
     print(f"Filtering: after filter pisces chain ids rows={len(filtered_df):,}, unique pdb_ids={filtered_df['pdb_id'].nunique():,}")
     return filtered_df
 
+
+def drop_terminal_rows_by_alpha(filtered_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Drop rows with ALPHA column with 360.0 which is not a valid dihedral angle and indicates terminal residues.
+    """
+    initial_len = len(filtered_df)
+    filtered_df = filtered_df[filtered_df["ALPHA"] != 360.0]
+    final_len = len(filtered_df)
+    print(f"Dropped terminal residues by ALPHA=360.0: dropped {initial_len - final_len} rows, remaining {final_len} rows.")
+    return filtered_df
+
+
 if __name__ == "__main__":
 
-    result_path = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset.parquet"
+    result_path = "/home/ubuntu/p2nd/data/output/pc20_base_fixed_dropped/dssp_dataset.parquet"
     df = pd.read_parquet(result_path)
 
     print(f"Read {len(df):,} rows from {result_path}")
 
     id_chains_to_keep = get_pisces_pdb_chains(PISCES_REF)
     filtered_df = filter_to_keep_pisces(df, id_chains_to_keep)
+    filtered_df = drop_terminal_rows_by_alpha(filtered_df)
 
-    output_path = "/home/ubuntu/p2nd/data/output/pc20_base_fixed/dssp_dataset_pisces_filtered.parquet"
+    output_path = "/home/ubuntu/p2nd/data/output/pc20_base_fixed_dropped/dssp_dataset_pisces_filtered.parquet"
 
     # save head 1000 rows to CSV for inspection
     csv_path = output_path.replace(".parquet", "_head1000.csv")
