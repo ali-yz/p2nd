@@ -20,8 +20,9 @@ python scripts/cluster_dendrogram.py \
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score, homogeneity_score
-from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+from scipy.cluster.hierarchy import linkage, dendrogram
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -141,11 +142,24 @@ Xs_core  = scaler.transform(X[core_idx])
 Xs_rest  = scaler.transform(X[rest_idx])
 Xs_all   = scaler.transform(X)  # for later use
 
-# Clustering: scipy linkage + fcluster
+# Clustering: sklearn AgglomerativeClustering (preserves original cluster IDs)
 logger.info(f"Clustering algorithm: AgglomerativeClustering (linkage={AGGLOMERATIVE_LINKAGE}, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
-Z_core = linkage(Xs_core, method=AGGLOMERATIVE_LINKAGE, metric='euclidean')
-core_labels = fcluster(Z_core, t=AGGLOMERATIVE_DISTANCE_THRESHOLD, criterion='distance')
-core_labels = core_labels - 1  # fcluster is 1-based, shift to 0-based
+agg = AgglomerativeClustering(
+    n_clusters=None,
+    distance_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,
+    linkage=AGGLOMERATIVE_LINKAGE
+)
+core_labels = agg.fit_predict(Xs_core)
+
+# Reconstruct scipy-compatible linkage matrix Z from sklearn's attributes
+# for use in dendrogram plotting
+n_samples = Xs_core.shape[0]
+merge_counts = np.zeros(agg.children_.shape[0])
+for i, (left, right) in enumerate(agg.children_):
+    left_count = 1 if left < n_samples else merge_counts[left - n_samples]
+    right_count = 1 if right < n_samples else merge_counts[right - n_samples]
+    merge_counts[i] = left_count + right_count
+Z_core = np.column_stack([agg.children_, agg.distances_, merge_counts])
 
 # Map cluster labels to 0..K-1 for clean indexing
 uniq = np.unique(core_labels)
