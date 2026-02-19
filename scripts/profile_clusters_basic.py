@@ -1,7 +1,7 @@
 """Profile Clusters Basic
 Example usage:
 python scripts/profile_clusters_basic.py --data-version v5 --desc sincosphi_sincospsi_tco_hbondflags --algo hdbscan
-
+python scripts/profile_clusters_basic.py --data-version v6 --desc sincosphi_sincospsi_sincosalpha_hbondflags --algo agglomerative --only-combined-output
 """
 
 import os
@@ -68,6 +68,12 @@ merged_df = pd.concat([base_df.add_prefix('base_'),
 
 print(f"  merged: {merged_df.shape}")
 print(merged_df.columns)
+
+# save the subset of rows with base_pdb_id equal to 8hui
+subset_df = merged_df[merged_df['base_pdb_id'] == '8hui']
+subset_output_path = os.path.join(PROFILE_OUTPUT_DIR, 'subset_8hui.csv')
+subset_df.to_csv(subset_output_path, index=False)
+print(f"Saved subset of 8hui to {subset_output_path}")
 
 # for each result_cluster plot base_PSI vs base_PHI
 if not ONLY_COMBINED_OUTPUT:
