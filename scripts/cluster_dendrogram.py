@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-# cluster.py
+# cluster_dendrogram.py
 
 """
-Cluster DSSP features using specified algorithm and persist results.
-python scripts/cluster.py \
-   --algo hdbscan \
-   --features_desc sincosphi_sincospsi_tco_hbondflags \
-   --data_version v5
+Agglomerative clustering with dendrogram + clustermap visualizations.
 
-python scripts/cluster.py \
-    --algo agglomerative \
+python scripts/cluster_dendrogram.py \
     --features_desc sincosphi_sincospsi_tco_hbondflags \
     --data_version v5
+
+python scripts/cluster_dendrogram.py \
+   --features_desc sincosphi_sincospsi_sincosalpha_hbondflags \
+   --data_version v6
+
+python scripts/cluster_dendrogram.py \
+    --features_desc sincosphi_sincospsi_hbondflags \
+    --data_version v7
 """
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, silhouette_score, homogeneity_score
-import hdbscan
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -36,10 +38,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# argparse to receive algo, feature desc, and data version
-parser = argparse.ArgumentParser(description="Cluster DSSP features and persist results.")
-parser.add_argument("--algo", choices=["agglomerative", "hdbscan", "kmeans"], required=True,
-                    help="Clustering algorithm to use.")
+# argparse — agglomerative only
+parser = argparse.ArgumentParser(description="Agglomerative clustering with dendrogram visualizations.")
 parser.add_argument("--features_desc", required=True,
                     help="Short descriptor for features used (goes into output paths).")
 parser.add_argument("--data_version", required=True,
@@ -48,50 +48,36 @@ parser.add_argument("--downsample", action="store_true",
                     help="Optional: enable downsampling for quick checks.")
 parser.add_argument("--downsample_size", type=int, default=100_000,
                     help="Downsample size if --downsample is set.")
-parser.add_argument("--hdb_min_cluster_size", type=int, default=200,
-                    help="HDBSCAN min_cluster_size.")
-parser.add_argument("--hdb_min_samples", type=int, default=None,
-                    help="HDBSCAN min_samples (None defaults to min_cluster_size).")
-parser.add_argument("--hdb_cluster_selection_method", type=str, default="eom",
-                    help="HDBSCAN cluster_selection_method. eom or leaf.")
 parser.add_argument("--agg_distance_threshold", type=float, default=50.0,
                     help="Agglomerative distance_threshold.")
 parser.add_argument("--agg_linkage", type=str, default="ward",
                     help="Agglomerative linkage method. ward, complete, average, single. default=ward.")
-parser.add_argument("--kmeans_k", type=int, default=8,
-                    help="KMeans number of clusters (K).")
 args = parser.parse_args()
 
 DATA_VERSION = args.data_version
 FEATURES_DESC = args.features_desc
-CLUSTERING_ALGO = args.algo
 DOWNSAMPLE = args.downsample
 DOWNSAMPLE_SIZE = args.downsample_size
-HDBSCAN_MIN_CLUSTER_SIZE = args.hdb_min_cluster_size
-HDBSCAN_MIN_SAMPLES = args.hdb_min_samples
-HDBSCAN_METHOD = args.hdb_cluster_selection_method
 AGGLOMERATIVE_DISTANCE_THRESHOLD = args.agg_distance_threshold
 AGGLOMERATIVE_LINKAGE = args.agg_linkage
-KMEANS_K = args.kmeans_k  # <-- new var
 CLASS_CAP = 6_000
 
-# derive IO paths and per-algo subdir
+# derive IO paths — hardcoded agglomerative subdir
 BASE_DIR = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}"
-ALGO_DIR = os.path.join(BASE_DIR, FEATURES_DESC, CLUSTERING_ALGO)
+ALGO_DIR = os.path.join(BASE_DIR, FEATURES_DESC, "agglomerative")
 os.makedirs(ALGO_DIR, exist_ok=True)
 
 TRANSFORMED_PATH_X = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_X.parquet"
 TRANSFORMED_PATH_Y = f"/home/ubuntu/p2nd/data/output/pc20_{DATA_VERSION}/dssp_dataset_transformed_Y.parquet"
 
-algo_name_for_title = (
-    "AgglomerativeClustering" if CLUSTERING_ALGO == "agglomerative"
-    else "HDBSCAN" if CLUSTERING_ALGO == "hdbscan"
-    else "KMeans"
-)
-PLOT_TITLE = f"Cluster - DSSP Overlap : {algo_name_for_title} : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
+PLOT_TITLE = f"Cluster - DSSP Overlap : AgglomerativeClustering : features={FEATURES_DESC} : data=pc20_{DATA_VERSION}"
 PLOT_PATH = os.path.join(
     ALGO_DIR,
-    f"{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20.png"
+    f"{FEATURES_DESC}_agglomerative{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20.png"
+)
+PLOT_PATH_DENDROGRAM = os.path.join(
+    ALGO_DIR,
+    f"{FEATURES_DESC}_agglomerative{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_dendrogram.png"
 )
 
 PLOT_XLABEL = "DSSP label"
@@ -155,30 +141,11 @@ Xs_core  = scaler.transform(X[core_idx])
 Xs_rest  = scaler.transform(X[rest_idx])
 Xs_all   = scaler.transform(X)  # for later use
 
-# Clustering step with selectable algorithm
-if CLUSTERING_ALGO.lower() == "agglomerative":
-    logger.info(f"Clustering algorithm: AgglomerativeClustering ({CLUSTERING_ALGO}, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
-    agg = AgglomerativeClustering(
-        n_clusters=None,           # let threshold decide
-        distance_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,    # tune this!
-        linkage=AGGLOMERATIVE_LINKAGE
-    )
-    core_labels = agg.fit_predict(Xs_core)
-elif CLUSTERING_ALGO.lower() == "hdbscan":
-    logger.info(f"Clustering algorithm: HDBSCAN (min_cluster_size={HDBSCAN_MIN_CLUSTER_SIZE}, min_samples={HDBSCAN_MIN_SAMPLES})")
-    hdb = hdbscan.HDBSCAN(
-        min_cluster_size=HDBSCAN_MIN_CLUSTER_SIZE,
-        min_samples=HDBSCAN_MIN_SAMPLES,
-        metric='euclidean',
-        cluster_selection_method=HDBSCAN_METHOD
-    )
-    core_labels = hdb.fit_predict(Xs_core)  # labels: -1 for noise, 0..K-1 otherwise
-elif CLUSTERING_ALGO.lower() == "kmeans":
-    logger.info(f"Clustering algorithm: KMeans (k={KMEANS_K})")
-    km = KMeans(n_clusters=KMEANS_K, random_state=42, n_init=10)
-    core_labels = km.fit_predict(Xs_core)
-else:
-    raise ValueError("CLUSTERING_ALGO must be either 'agglomerative', 'hdbscan', or 'kmeans'.")
+# Clustering: scipy linkage + fcluster
+logger.info(f"Clustering algorithm: AgglomerativeClustering (linkage={AGGLOMERATIVE_LINKAGE}, distance_threshold={AGGLOMERATIVE_DISTANCE_THRESHOLD})")
+Z_core = linkage(Xs_core, method=AGGLOMERATIVE_LINKAGE, metric='euclidean')
+core_labels = fcluster(Z_core, t=AGGLOMERATIVE_DISTANCE_THRESHOLD, criterion='distance')
+core_labels = core_labels - 1  # fcluster is 1-based, shift to 0-based
 
 # Map cluster labels to 0..K-1 for clean indexing
 uniq = np.unique(core_labels)
@@ -276,7 +243,7 @@ ct_w = ct_w.reindex(columns=desired_cols)
 
 # absolute counts for annotations (full set)
 ct_counts = df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
-ct_counts = ct_counts.loc[ct_w.index, ct_w.columns].astype(int).to_numpy()
+ct_counts = ct_counts.loc[ct_w.index, ct_w.columns].astype(int)
 
 label_map = {
     "B": "β-bridge",
@@ -301,20 +268,75 @@ xlabels = [
 cluster_sizes = df.groupby("cluster").size()
 ylabels = [f"Cluster {k} (n={cluster_sizes[k]})" for k in ct_w.index]
 
-plt.figure(figsize=(10, 6))
-ax = sns.heatmap(ct_w, cmap="viridis", xticklabels=xlabels, yticklabels=ylabels, annot=ct_counts, fmt="d")
-ax.set_title(PLOT_TITLE)
-ax.set_xlabel(PLOT_XLABEL)
-ax.set_ylabel(PLOT_YLABEL)
-ax.tick_params(axis='x', rotation=45, labelrotation=45)
-plt.tight_layout()
-plt.savefig(PLOT_PATH, dpi=200)
-logger.info(f"Saved cluster vs DSSP overlap plot to {PLOT_PATH}")
+# ============================================================
+# STANDALONE DENDROGRAM PLOT
+# ============================================================
+logger.info("Plotting standalone dendrogram...")
+fig_dend, ax_dend = plt.subplots(figsize=(12, 6))
+dendrogram(
+    Z_core,
+    truncate_mode='lastp',
+    p=K,
+    color_threshold=AGGLOMERATIVE_DISTANCE_THRESHOLD,
+    show_contracted=True,
+    ax=ax_dend,
+)
+ax_dend.axhline(y=AGGLOMERATIVE_DISTANCE_THRESHOLD, color='red', linestyle='--', linewidth=1,
+                label=f'distance threshold = {AGGLOMERATIVE_DISTANCE_THRESHOLD}')
+ax_dend.legend(loc='best')
+ax_dend.set_title(f"Dendrogram (truncated to {K} leaves) : {FEATURES_DESC} : pc20_{DATA_VERSION}")
+ax_dend.set_xlabel("Cluster (sample count)")
+ax_dend.set_ylabel("Distance")
+fig_dend.tight_layout()
+fig_dend.savefig(PLOT_PATH_DENDROGRAM, dpi=200)
+plt.close(fig_dend)
+logger.info(f"Saved dendrogram to {PLOT_PATH_DENDROGRAM}")
 
-# === Core-only plot (balanced core subset) ===
+# ============================================================
+# FULL-SET CLUSTERMAP (heatmap + row dendrogram)
+# ============================================================
+logger.info("Plotting full-set clustermap...")
+
+# Drop noise cluster (-1) if present — it would cause a dimension mismatch with the linkage matrix
+ct_w_hm = ct_w.drop(index=-1, errors='ignore')
+ct_counts_hm = ct_counts.drop(index=-1, errors='ignore')
+ylabels_hm = [f"Cluster {k} (n={cluster_sizes[k]})" for k in ct_w_hm.index]
+
+# Compute cluster centroids in feature space for the row linkage
+centroids = np.array([Xs_core[core_labels_compact == k].mean(axis=0) for k in ct_w_hm.index])
+Z_clusters = linkage(centroids, method='ward')
+
+# Set index to ylabels so clustermap preserves label alignment
+ct_w_hm.index = ylabels_hm
+ct_counts_hm.index = ylabels_hm
+ct_annot = ct_counts_hm.copy()  # DataFrame so annotations reorder with rows
+
+g = sns.clustermap(
+    ct_w_hm,
+    row_linkage=Z_clusters,
+    col_cluster=False,
+    cmap="viridis",
+    annot=ct_annot,
+    fmt="d",
+    xticklabels=xlabels,
+    figsize=(12, 8),
+    dendrogram_ratio=(0.15, 0.0),
+    cbar_pos=None,
+)
+g.ax_heatmap.set_xlabel(PLOT_XLABEL)
+g.ax_heatmap.set_ylabel(PLOT_YLABEL)
+g.ax_heatmap.tick_params(axis='x', rotation=45)
+g.fig.suptitle(PLOT_TITLE, y=1.02, fontsize=11)
+g.fig.savefig(PLOT_PATH, dpi=200, bbox_inches='tight')
+plt.close(g.fig)
+logger.info(f"Saved cluster vs DSSP clustermap to {PLOT_PATH}")
+
+# ============================================================
+# CORE-ONLY CLUSTERMAP
+# ============================================================
 PLOT_PATH_CORE = os.path.join(
     ALGO_DIR,
-    f"{FEATURES_DESC}_{CLUSTERING_ALGO}{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20_core.png"
+    f"{FEATURES_DESC}_agglomerative{'_' + str(DOWNSAMPLE_SIZE) if DOWNSAMPLE else ''}_pc20_core.png"
 )
 PLOT_TITLE_CORE = PLOT_TITLE + " — CORE ONLY"
 
@@ -343,7 +365,7 @@ ct_w_core = ct_w_core.reindex(columns=desired_cols)
 
 # absolute counts for annotations (core only)
 ct_counts_core = core_df.pivot_table(index="cluster", columns="dssp", values="w", aggfunc="count", fill_value=0)
-ct_counts_core = ct_counts_core.loc[ct_w_core.index, ct_w_core.columns].astype(int).to_numpy()
+ct_counts_core = ct_counts_core.loc[ct_w_core.index, ct_w_core.columns].astype(int)
 
 # DSSP labels with totals (core only)
 totals_per_dssp_core = core_df["dssp"].value_counts()
@@ -356,15 +378,40 @@ xlabels_core = [
 cluster_sizes_core = core_df.groupby("cluster").size()
 ylabels_core = [f"Core cluster {k} (n={cluster_sizes_core[k]})" for k in ct_w_core.index]
 
-plt.figure(figsize=(10, 6))
-ax = sns.heatmap(ct_w_core, cmap="viridis", xticklabels=xlabels_core, yticklabels=ylabels_core, annot=ct_counts_core, fmt="d")
-ax.set_title(PLOT_TITLE_CORE)
-ax.set_xlabel(PLOT_XLABEL)
-ax.set_ylabel("Cluster (balanced-core only)")
-ax.tick_params(axis='x', rotation=45, labelrotation=45)
-plt.tight_layout()
-plt.savefig(PLOT_PATH_CORE, dpi=200)
-logger.info(f"Saved CORE-ONLY cluster vs DSSP overlap plot to {PLOT_PATH_CORE}")
+logger.info("Plotting core-only clustermap...")
+
+# Drop noise cluster (-1) if present
+ct_w_core_hm = ct_w_core.drop(index=-1, errors='ignore')
+ct_counts_core_hm = ct_counts_core.drop(index=-1, errors='ignore')
+ylabels_core_hm = [f"Core cluster {k} (n={cluster_sizes_core[k]})" for k in ct_w_core_hm.index]
+
+# Centroids for core-only linkage
+centroids_core = np.array([Xs_core[core_labels_compact == k].mean(axis=0) for k in ct_w_core_hm.index])
+Z_clusters_core = linkage(centroids_core, method='ward')
+
+ct_w_core_hm.index = ylabels_core_hm
+ct_counts_core_hm.index = ylabels_core_hm
+ct_annot_core = ct_counts_core_hm.copy()
+
+g_core = sns.clustermap(
+    ct_w_core_hm,
+    row_linkage=Z_clusters_core,
+    col_cluster=False,
+    cmap="viridis",
+    annot=ct_annot_core,
+    fmt="d",
+    xticklabels=xlabels_core,
+    figsize=(12, 8),
+    dendrogram_ratio=(0.15, 0.0),
+    cbar_pos=None,
+)
+g_core.ax_heatmap.set_xlabel(PLOT_XLABEL)
+g_core.ax_heatmap.set_ylabel("Cluster (balanced-core only)")
+g_core.ax_heatmap.tick_params(axis='x', rotation=45)
+g_core.fig.suptitle(PLOT_TITLE_CORE, y=1.02, fontsize=11)
+g_core.fig.savefig(PLOT_PATH_CORE, dpi=200, bbox_inches='tight')
+plt.close(g_core.fig)
+logger.info(f"Saved CORE-ONLY clustermap to {PLOT_PATH_CORE}")
 
 # Persist minimal artifacts for downstream profiling
 # 1) Cluster labels aligned to original row order in this run
@@ -375,7 +422,6 @@ pd.DataFrame({"cluster": full_labels}).to_parquet(clusters_path, index=False)
 scaler_path = os.path.join(ALGO_DIR, "scaler.joblib")
 # dump(scaler, scaler_path)
 
-# <<< CHANGED: Log scores before writing metadata (now includes Homogeneity_core)
 logger.info(f"Scores — AMI_core={AMI_core}, Homogeneity_core={Homogeneity_core}, Silhouette_core={Silhouette_core}: ARGS: {args}")
 
 # 3) Metadata for reproducibility
@@ -383,18 +429,11 @@ meta = {
     "timestamp": datetime.now().isoformat(),
     "data_version": DATA_VERSION,
     "features_desc": FEATURES_DESC,
-    "algo": CLUSTERING_ALGO,
+    "algo": "agglomerative",
     "params": {
-        "hdbscan": {
-            "min_cluster_size": HDBSCAN_MIN_CLUSTER_SIZE,
-            "min_samples": HDBSCAN_MIN_SAMPLES
-        },
         "agglomerative": {
             "distance_threshold": AGGLOMERATIVE_DISTANCE_THRESHOLD,
-            "linkage": "ward"
-        },
-        "kmeans": {
-            "k": KMEANS_K
+            "linkage": AGGLOMERATIVE_LINKAGE
         },
         "class_cap": CLASS_CAP,
         "downsample": DOWNSAMPLE,
@@ -414,7 +453,8 @@ meta = {
     "class_counts_full": dict(zip(*np.unique(y, return_counts=True))),
     "plots": {
         "full": PLOT_PATH,
-        "core": PLOT_PATH_CORE
+        "core": PLOT_PATH_CORE,
+        "dendrogram": PLOT_PATH_DENDROGRAM
     },
     "artifacts": {
         "clusters_parquet": clusters_path,
