@@ -3,6 +3,7 @@ data/*
 *.pid
 *.log
 *.tar.gz
+.venv_pymol/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

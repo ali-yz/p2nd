@@ -58,3 +58,4 @@ df_v6[df_v6['pdb_id'] == '2pne'].to_csv("/home/ubuntu/p2nd/data/output/validatio
 # 8hui
 print(df_v6[df_v6['pdb_id'] == '8hui'])
 df_v6[df_v6['pdb_id'] == '8hui'].to_csv("/home/ubuntu/p2nd/data/output/validations/8hui_v6_validation.csv", index=False)
+
